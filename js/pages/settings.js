@@ -23,29 +23,6 @@ export function renderSettings() {
 
     <div style="display:flex;flex-direction:column;gap:var(--sp-6);max-width:700px">
 
-      <!-- Role Switcher -->
-      <div class="card animate-fade-up delay-1" style="border-left:4px solid var(--amber)">
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--sp-4)">
-          <div>
-            <h3>👑 Switch Role (Demo Mode)</h3>
-            <p style="font-size:.85rem;color:var(--text-3);margin-top:4px">
-              Currently logged in as: <strong style="color:var(--primary);text-transform:capitalize" id="current-role-badge">${lsGet('hp_user_role', 'student')}</strong>
-            </p>
-          </div>
-          <div class="flex gap-2">
-            <button class="btn ${lsGet('hp_user_role','student')==='student'?'btn-primary':'btn-outline'} btn-sm" id="role-btn-student">
-              👨‍🎓 Student Role
-            </button>
-            <button class="btn ${lsGet('hp_user_role','student')==='admin'?'btn-primary':'btn-outline'} btn-sm" id="role-btn-admin">
-              ⚡ Admin Role
-            </button>
-          </div>
-        </div>
-        <p style="font-size:.78rem;color:var(--text-3);margin-top:var(--sp-3)">
-          Admin role shows the Admin Bar at the top of the app, letting you manage questions, upload PDFs, and manage flashcards.
-        </p>
-      </div>
-
       <!-- Profile -->
       <div class="card animate-fade-up delay-1">
         <h3 style="margin-bottom:var(--sp-5)">👤 Profile</h3>
@@ -183,26 +160,6 @@ function renderGroqKeyList(keys) {
 }
 
 function wireSettings() {
-  document.getElementById('role-btn-student')?.addEventListener('click', () => {
-    lsSet('hp_user_role', 'student');
-    lsSet('hp_demo_mode', true);
-    const demoUser = lsGet('hp_demo_user', { name: 'Student', role: 'student', email: 'student@homeoprep.com' });
-    demoUser.role = 'student';
-    lsSet('hp_demo_user', demoUser);
-    toast('Switched to Student role! Reloading...', 'success');
-    setTimeout(() => location.reload(), 400);
-  });
-
-  document.getElementById('role-btn-admin')?.addEventListener('click', () => {
-    lsSet('hp_user_role', 'admin');
-    lsSet('hp_demo_mode', true);
-    const demoUser = lsGet('hp_demo_user', { name: 'Dr. Admin', role: 'admin', email: 'admin@homeoprep.com' });
-    demoUser.role = 'admin';
-    lsSet('hp_demo_user', demoUser);
-    toast('⚡ Switched to Admin role! Reloading...', 'success');
-    setTimeout(() => location.reload(), 400);
-  });
-
   document.getElementById('s-ai-provider')?.addEventListener('change', (e) => {
     localStorage.setItem('hp_ai_provider', e.target.value);
     toast(`AI Provider set to: ${e.target.value.toUpperCase()}`, 'success');

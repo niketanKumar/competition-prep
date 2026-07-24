@@ -30,18 +30,6 @@ export function renderLogin() {
         <div id="auth-form-container">
           ${renderAuthForm()}
         </div>
-
-        <div class="divider-text"><span>or</span></div>
-
-        <button class="btn btn-outline w-full" id="demo-btn">
-          🎮 Try Demo Mode (no account needed)
-        </button>
-
-        ${!configured ? `
-          <div style="margin-top:var(--sp-4);padding:var(--sp-3);background:var(--amber-bg);border:1px solid var(--amber);border-radius:var(--r-sm);font-size:.78rem;color:var(--amber)">
-            ⚠️ Supabase credentials not set yet. Click <strong>Demo Mode</strong> or configure credentials in Settings.
-          </div>
-        ` : ''}
       </div>
     </div>
 
