@@ -89,8 +89,26 @@ async function initApp() {
     }
   });
 
-  const demoMode = lsGet('hp_demo_mode', false);
-  const demoUser = lsGet('hp_demo_user', null);
+  // If Supabase is not configured yet, auto-enable Demo Mode for fresh visitors
+  if (!isConfigured()) {
+    if (!lsGet('hp_demo_user')) {
+      lsSet('hp_demo_mode', true);
+      lsSet('hp_demo_user', {
+        id: 'demo-student',
+        email: 'demo@homeoprep.app',
+        name: 'Student',
+        role: 'student',
+      });
+    }
+  }
+
+  const demoMode = lsGet('hp_demo_mode', !isConfigured());
+  let demoUser   = lsGet('hp_demo_user', null);
+
+  if (!demoUser && demoMode) {
+    demoUser = { id: 'demo-student', email: 'demo@homeoprep.app', name: 'Student', role: 'student' };
+    lsSet('hp_demo_user', demoUser);
+  }
 
   // 1. If Supabase is configured and user is NOT explicitly in demo mode, try Supabase session
   if (isConfigured() && !demoMode) {
@@ -109,8 +127,8 @@ async function initApp() {
   }
 
   // 2. If demo mode or demo user exists
-  if (demoMode && demoUser) {
-    showApp(demoUser);
+  if (demoMode || demoUser) {
+    showApp(demoUser || { id: 'demo-student', email: 'demo@homeoprep.app', name: 'Student', role: 'student' });
   } else {
     showLoginPage();
   }
@@ -193,8 +211,10 @@ function showLoginPage() {
 
 function hideLoading() {
   const overlay = document.getElementById('loading-overlay');
+  if (!overlay) return;
   overlay.classList.add('fade-out');
-  setTimeout(() => overlay.classList.add('hidden'), 400);
+  overlay.classList.add('hidden');
+  overlay.style.display = 'none';
 }
 
 function logout() {
