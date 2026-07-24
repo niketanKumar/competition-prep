@@ -18,7 +18,7 @@ import { renderAdminUpload }    from './pages/admin/upload.js';
 import { renderAdminStudents }  from './pages/admin/students.js';
 import { renderAdminNotifications } from './pages/admin/notifications.js';
 import { lsGet, lsSet, getStreak, toast } from './lib/utils.js';
-import { getSession, onAuthChange, signOut, fetchProfile } from './lib/supabase.js';
+import { getSession, onAuthChange, signOut, fetchProfile, isConfigured } from './lib/supabase.js';
 
 // ─── App State ───────────────────────────────────────────────────────────────
 let currentUser   = null;
