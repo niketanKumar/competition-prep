@@ -1,7 +1,7 @@
 // supabase.js — Supabase client configuration & API helpers
 
-const DEFAULT_SUPABASE_URL      = 'https://uoifrcsfkjblonvkqruq.supabase.co';
-const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVvaWZyY3Nma2pibG9udmtxcnVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODc0NzksImV4cCI6MjEwMDQ2MzQ3OX0.RkhvB88GUHrjWtKLuHOvKMles4KbUKjjsBoqlTiLfa8';
+export const DEFAULT_SUPABASE_URL      = 'https://uoifrcsfkjblonvkqruq.supabase.co';
+export const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVvaWZyY3Nma2pibG9udmtxcnVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODc0NzksImV4cCI6MjEwMDQ2MzQ3OX0.RkhvB88GUHrjWtKLuHOvKMles4KbUKjjsBoqlTiLfa8';
 
 const SUPABASE_URL      = localStorage.getItem('hp_supabase_url')      || DEFAULT_SUPABASE_URL;
 const SUPABASE_ANON_KEY = localStorage.getItem('hp_supabase_anon_key') || DEFAULT_SUPABASE_ANON_KEY;

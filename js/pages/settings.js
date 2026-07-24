@@ -1,6 +1,6 @@
 // settings.js — Settings page with Groq, Gemini, Explanation Caching, Exam date, Profile
 import { lsGet, lsSet, toast } from '../lib/utils.js';
-import { isConfigured } from '../lib/supabase.js';
+import { isConfigured, DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY } from '../lib/supabase.js';
 
 export function renderSettings() {
   const examDate   = lsGet('hp_exam_date', '');
@@ -9,8 +9,8 @@ export function renderSettings() {
   const groqKeys   = JSON.parse(localStorage.getItem('hp_groq_keys') || '[]');
   const provider   = localStorage.getItem('hp_ai_provider') || 'auto';
   const notifTime  = lsGet('hp_notif_time', '08:00');
-  const sbUrl      = lsGet('hp_supabase_url', '') || localStorage.getItem('hp_supabase_url') || '';
-  const sbKey      = lsGet('hp_supabase_anon_key', '') || localStorage.getItem('hp_supabase_anon_key') || '';
+  const sbUrl      = lsGet('hp_supabase_url', '') || localStorage.getItem('hp_supabase_url') || DEFAULT_SUPABASE_URL;
+  const sbKey      = lsGet('hp_supabase_anon_key', '') || localStorage.getItem('hp_supabase_anon_key') || DEFAULT_SUPABASE_ANON_KEY;
 
   const cacheObj   = JSON.parse(localStorage.getItem('hp_ai_exp_cache') || '{}');
   const cacheCount = Object.keys(cacheObj).length;
