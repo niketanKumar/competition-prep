@@ -289,6 +289,7 @@ export async function parseQuestionsFromText(text, subject) {
           correct: typeof item.correct === 'number' ? item.correct : typeof item.ans === 'number' ? item.ans : 0,
           exp: item.exp || item.explanation || '',
           subject: normalizeSubjectId(item.subject || subject),
+          exam: item.exam || null,
           year: item.year || 2025,
           image: imgUrl,
           imageUrl: imgUrl,
