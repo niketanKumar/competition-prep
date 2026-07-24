@@ -18,6 +18,15 @@
   <!-- PDF.js for native PDF viewing & page text extraction -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script>
+    // Catch all errors and show on screen for debugging
+    window.onerror = function(msg, src, line, col, err) {
+      var el = document.getElementById('loading-overlay');
+      if (el) el.innerHTML = '<div style="padding:20px;font-family:monospace;font-size:12px;color:red;text-align:left;max-width:90vw;word-break:break-all"><b>JS Error:</b><br>' + msg + '<br><br><b>Source:</b> ' + src + '<br><b>Line:</b> ' + line + '</div>';
+    };
+    window.addEventListener('unhandledrejection', function(e) {
+      var el = document.getElementById('loading-overlay');
+      if (el) el.innerHTML = '<div style="padding:20px;font-family:monospace;font-size:12px;color:red;text-align:left;max-width:90vw;word-break:break-all"><b>Promise Rejection:</b><br>' + (e.reason?.message || e.reason || 'Unknown') + '<br><br><b>Stack:</b><br>' + (e.reason?.stack || '') + '</div>';
+    });
     if (window.pdfjsLib) {
       window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     }
