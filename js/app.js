@@ -202,18 +202,19 @@ function hideLoading() {
   overlay.style.display = 'none';
 }
 
-function logout() {
-  signOut();
+window.logout = function logout() {
+  try { signOut(); } catch (e) {}
   currentUser = null;
   isAdmin     = false;
   lsSet('hp_demo_mode', false);
-  document.getElementById('sidebar').classList.add('hidden');
-  document.getElementById('main-content').classList.add('hidden');
-  document.getElementById('mobile-header').classList.add('hidden');
-  document.getElementById('admin-bar').classList.add('hidden');
+  lsRemove('hp_demo_user');
+  document.getElementById('sidebar')?.classList.add('hidden');
+  document.getElementById('main-content')?.classList.add('hidden');
+  document.getElementById('mobile-header')?.classList.add('hidden');
+  document.getElementById('admin-bar')?.classList.add('hidden');
   document.body.classList.remove('admin-active');
   showLoginPage();
-}
+};
 
 // ─── Navigation Wiring ────────────────────────────────────────────────────────
 function wireNavigation() {
