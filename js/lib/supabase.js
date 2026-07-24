@@ -134,8 +134,6 @@ function sanitizeQuestion(q) {
     correct: typeof q.correct === 'number' ? q.correct : 0,
     exp: q.exp || '',
     image_url: img,
-    imageUrl: img,
-    image: img,
     verified: q.verified !== false,
     difficulty: q.difficulty || 'medium',
     group_id: q.group_id || q.group || null,
