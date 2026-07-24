@@ -251,6 +251,9 @@ function wireNavigation() {
   document.getElementById('mobile-menu-btn')?.addEventListener('click', toggleMobileSidebar);
   document.getElementById('sidebar-overlay')?.addEventListener('click', closeMobileSidebar);
 
+  // Logout button
+  document.getElementById('logout-btn')?.addEventListener('click', logout);
+
   // Demo login event
   window.addEventListener('hp:login', (e) => {
     if (e.detail.demo) {
