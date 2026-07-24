@@ -118,6 +118,16 @@ export function renderAdminQuestions() {
             </div>
             <div class="form-row">
               <div class="form-group">
+                <label class="form-label">Exam Tag *</label>
+                <select class="form-select" id="qf-exam">
+                  <option value="AIAPGET">⚕️ AIAPGET</option>
+                  <option value="UPSC">🏛️ UPSC (Homoeopathy MO)</option>
+                  <option value="State PSC">🏛️ State PSC / Medical Officer</option>
+                  <option value="NIH/PG">🎓 NIH / PG Entrance</option>
+                  <option value="Other">📌 Other Competitive Exam</option>
+                </select>
+              </div>
+              <div class="form-group">
                 <label class="form-label">Group / Set</label>
                 <input class="form-input" type="text" id="qf-group" placeholder="PYQ-2025, Custom Set 1…" />
               </div>
@@ -254,10 +264,13 @@ function openQuestionModal(q) {
     document.getElementById('qf-opt-d').value   = q.options?.[3] || '';
     document.getElementById('qf-correct').value = q.correct !== null && q.correct !== undefined ? String(q.correct) : '';
     document.getElementById('qf-exp').value     = q.exp || '';
+    document.getElementById('qf-exam').value    = q.exam || 'AIAPGET';
     document.getElementById('qf-group').value   = q.group || '';
     document.getElementById('qf-diff').value    = q.difficulty || 'medium';
     document.getElementById('qf-img').value     = q.image_url || q.imageUrl || q.image || '';
     document.getElementById('qf-verified').checked = !!q.verified;
+  } else {
+    document.getElementById('qf-exam').value = 'AIAPGET';
   }
   document.getElementById('question-modal').classList.remove('hidden');
 }
@@ -268,6 +281,7 @@ async function saveQuestion() {
   const q = {
     id: editingId || Date.now(),
     subject:    document.getElementById('qf-subject').value,
+    exam:       document.getElementById('qf-exam').value || 'AIAPGET',
     year:       parseInt(document.getElementById('qf-year').value) || null,
     q:          document.getElementById('qf-q').value.trim(),
     options:   [

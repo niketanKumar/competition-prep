@@ -121,10 +121,7 @@ function renderPastTests() {
   </div>`;
 }
 
-function getAllQuestions() {
-  const custom = lsGet('hp_questions', []);
-  return [...SEED_QUESTIONS, ...custom];
-}
+
 
 function startTest(type, opts = {}) {
   let pool = getAllQuestions();

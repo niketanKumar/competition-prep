@@ -41,11 +41,21 @@ export function renderAdminUpload() {
           </div>
           <div class="form-row">
             <div class="form-group">
+              <label class="form-label">Exam Tag *</label>
+              <select class="form-select" id="pdf-exam">
+                <option value="AIAPGET" selected>⚕️ AIAPGET</option>
+                <option value="UPSC">🏛️ UPSC (Homoeopathy MO)</option>
+                <option value="State PSC">🏛️ State PSC / Medical Officer</option>
+                <option value="NIH/PG">🎓 NIH / PG Entrance</option>
+                <option value="Other">📌 Other Competitive Exam</option>
+              </select>
+            </div>
+            <div class="form-group">
               <label class="form-label">Year (optional)</label>
               <input class="form-input" type="number" id="pdf-year" placeholder="2025" min="2010" max="2030" />
             </div>
             <div class="form-group">
-              <label class="form-label">Group / Tag</label>
+              <label class="form-label">Group / Batch Tag</label>
               <input class="form-input" type="text" id="pdf-group" placeholder="PYQ-2025-Extracted" />
             </div>
           </div>
@@ -91,6 +101,7 @@ function wireAdminUpload() {
 async function handleAiExtraction() {
   const text    = document.getElementById('raw-text-input').value.trim();
   const subject = document.getElementById('pdf-subject').value;
+  const exam    = document.getElementById('pdf-exam').value || 'AIAPGET';
   const year    = parseInt(document.getElementById('pdf-year').value) || null;
   const group   = document.getElementById('pdf-group').value.trim() || null;
 
@@ -114,6 +125,7 @@ async function handleAiExtraction() {
           options: q.options || [],
           correct: typeof q.correct === 'number' ? q.correct : 0,
           subject: normalizeSubjectId(q.subject || subject),
+          exam: q.exam || exam || 'AIAPGET',
           year: q.year || year || 2025,
           group: group || 'Imported',
           exp: q.exp || '',
@@ -160,6 +172,7 @@ function renderExtractedPreview() {
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--sp-2);gap:var(--sp-2)">
         <div style="display:flex;align-items:center;gap:var(--sp-2)">
           <span style="font-weight:700;font-size:.8rem;color:var(--primary)">Q${idx + 1}</span>
+          ${q.exam ? `<span style="font-size:.72rem;font-weight:600;color:var(--primary);background:var(--primary-bg);padding:2px 8px;border-radius:99px">🏷️ ${esc(q.exam)}</span>` : ''}
           ${subjInfo ? `<span style="font-size:.72rem;font-weight:600;padding:2px 8px;border-radius:99px;background:${subjInfo.bg};color:${subjInfo.color}">${subjInfo.icon} ${subjInfo.name}</span>` : ''}
           ${q.year ? `<span style="font-size:.72rem;color:var(--text-3);background:var(--amber-bg);padding:2px 6px;border-radius:99px">${q.year}</span>` : ''}
         </div>
