@@ -97,9 +97,7 @@ async function initApp() {
   // 1. If Supabase IS configured, try to restore an active session
   if (configured) {
     try {
-      const sessionPromise = getSession();
-      const timeoutPromise = new Promise(resolve => setTimeout(() => resolve(null), 1500));
-      const session = await Promise.race([sessionPromise, timeoutPromise]);
+      const session = await getSession();
       if (session?.user) {
         await loginUser(session.user);
         setupAuthListener();
@@ -177,6 +175,9 @@ function showApp(user) {
   currentUser = user;
   isAdmin     = user.role === 'admin';
 
+  lsSet('hp_user_name', user.name);
+  lsSet('hp_user_role', user.role);
+
   // Hide loading + login, show app
   hideLoading();
   document.getElementById('login-page').classList.add('hidden');
@@ -186,7 +187,7 @@ function showApp(user) {
 
   // Populate sidebar user
   document.getElementById('user-name').textContent  = user.name;
-  document.getElementById('user-role').textContent  = user.role;
+  document.getElementById('user-role').textContent  = user.role.charAt(0).toUpperCase() + user.role.slice(1);
   document.getElementById('user-avatar').textContent = user.name[0]?.toUpperCase() || 'S';
 
   // Streak
