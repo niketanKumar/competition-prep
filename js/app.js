@@ -18,7 +18,7 @@ import { renderAdminUpload }    from './pages/admin/upload.js';
 import { renderAdminStudents }  from './pages/admin/students.js';
 import { renderAdminNotifications } from './pages/admin/notifications.js';
 import { lsGet, lsSet, getStreak, toast } from './lib/utils.js';
-import { getSession, onAuthChange, signOut, fetchProfile, isConfigured } from './lib/supabase.js';
+import { getSession, onAuthChange, signOut, fetchProfile, isConfigured, getAuthUser } from './lib/supabase.js';
 
 // ─── App State ───────────────────────────────────────────────────────────────
 let currentUser   = null;
@@ -155,29 +155,40 @@ function setupAuthListener() {
 }
 
 export async function loginUser(authUser) {
+  // 1. Get fresh user data from Supabase auth server (includes latest user_metadata)
+  let freshUser = null;
+  try {
+    freshUser = await getAuthUser();
+  } catch (e) {}
+
+  // 2. Get profile from database (has role set via Supabase dashboard)
   let profile = null;
   try {
     const { data, error } = await fetchProfile(authUser.id);
     if (error) {
       console.error('[App] Profile fetch error:', error);
     } else {
-      console.log('[App] Profile fetched successfully:', data);
+      console.log('[App] Profile fetched:', data);
     }
     profile = data;
   } catch (e) {
     console.warn('[App] Profile fetch exception:', e);
   }
 
-  const role = profile?.role || authUser.user_metadata?.role || 'student';
+  // 3. Determine role: profiles table wins (admin can set it there), then user_metadata
+  const role = profile?.role
+    || freshUser?.user_metadata?.role
+    || authUser?.user_metadata?.role
+    || 'student';
 
-  const user = {
-    id:    authUser.id,
-    email: authUser.email,
-    name:  profile?.name || authUser.user_metadata?.full_name || authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'Student',
-    role:  role,
-  };
+  const name = profile?.name
+    || freshUser?.user_metadata?.full_name
+    || authUser?.user_metadata?.full_name
+    || authUser?.email?.split('@')[0]
+    || 'Student';
 
-  console.log('[App] Final user object:', user);
+  const user = { id: authUser.id, email: authUser.email, name, role };
+  console.log('[App] Resolved user — role:', role, '| profile data:', profile);
   showApp(user);
 }
 

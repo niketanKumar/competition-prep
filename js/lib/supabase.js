@@ -77,6 +77,15 @@ export function onAuthChange(callback) {
 }
 
 // ─── User Profile ────────────────────────────────────────────────────────────
+export async function getAuthUser() {
+  const sb = getSupabase();
+  if (!sb) return null;
+  try {
+    const { data } = await sb.auth.getUser();
+    return data?.user || null;
+  } catch { return null; }
+}
+
 export async function fetchProfile(userId) {
   const sb = getSupabase();
   if (!sb) return { data: null, error: null };
