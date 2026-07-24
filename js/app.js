@@ -92,8 +92,10 @@ async function initApp() {
     }
   });
 
-  // 1. If Supabase is configured, check for active user session first
-  if (isConfigured()) {
+  const configured = isConfigured();
+
+  // 1. If Supabase IS configured, try to restore an active session
+  if (configured) {
     try {
       const sessionPromise = getSession();
       const timeoutPromise = new Promise(resolve => setTimeout(() => resolve(null), 1500));
@@ -108,14 +110,20 @@ async function initApp() {
     }
   }
 
-  // 2. If user explicitly enabled Demo Mode in this browser session
+  // 2. If user explicitly enabled Demo Mode previously, restore it
   const demoMode = lsGet('hp_demo_mode', false);
   const demoUser = lsGet('hp_demo_user', null);
 
   if (demoMode && demoUser) {
     showApp(demoUser);
+  } else if (!configured) {
+    // 3. Supabase not set up at all → auto Demo Mode (no sign-in possible anyway)
+    const fallbackUser = { id: 'demo-student', email: 'demo@homeoprep.app', name: 'Student', role: 'student' };
+    lsSet('hp_demo_mode', true);
+    lsSet('hp_demo_user', fallbackUser);
+    showApp(fallbackUser);
   } else {
-    // 3. Otherwise show Sign In / Create Account page
+    // 4. Supabase configured but no active session → show Sign In page
     showLoginPage();
   }
 
