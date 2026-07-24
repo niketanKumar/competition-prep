@@ -6,11 +6,11 @@
   <meta name="theme-color" content="#C4714F" />
   <meta name="description" content="AI-powered AIAPGET Homoeopathy exam preparation — mock tests, flashcards, study planner, analytics." />
   <title>HomeoPrep — AIAPGET Study Companion</title>
-  <link rel="manifest" href="/manifest.json" />
+  <link rel="manifest" href="./manifest.json" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/css/main.css" />
+  <link rel="stylesheet" href="./css/main.css" />
   <!-- Supabase -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <!-- Chart.js for analytics -->
@@ -139,11 +139,14 @@
     <div id="sidebar-overlay" class="sidebar-overlay hidden"></div>
   </div>
 
-  <script type="module" src="/js/app.js"></script>
+  <script type="module" src="./js/app.js"></script>
   <script>
+    // Force unregister legacy service workers to clear stuck caches
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      navigator.serviceWorker.getRegistrations().then(registrations => {
+        for (let registration of registrations) {
+          registration.unregister();
+        }
       });
     }
   </script>
