@@ -84,34 +84,15 @@ window.navigate = function(page, params = '') {
 async function initApp() {
   window.addEventListener('hp:login', (e) => {
     if (e.detail?.demo) {
-      const demoUser = lsGet('hp_demo_user');
-      if (demoUser) showApp(demoUser);
+      const demoUser = lsGet('hp_demo_user') || { id: 'demo-student', email: 'demo@homeoprep.app', name: 'Student', role: 'student' };
+      lsSet('hp_demo_mode', true);
+      lsSet('hp_demo_user', demoUser);
+      showApp(demoUser);
     }
   });
 
-  // If Supabase is not configured yet, auto-enable Demo Mode for fresh visitors
-  if (!isConfigured()) {
-    if (!lsGet('hp_demo_user')) {
-      lsSet('hp_demo_mode', true);
-      lsSet('hp_demo_user', {
-        id: 'demo-student',
-        email: 'demo@homeoprep.app',
-        name: 'Student',
-        role: 'student',
-      });
-    }
-  }
-
-  const demoMode = lsGet('hp_demo_mode', !isConfigured());
-  let demoUser   = lsGet('hp_demo_user', null);
-
-  if (!demoUser && demoMode) {
-    demoUser = { id: 'demo-student', email: 'demo@homeoprep.app', name: 'Student', role: 'student' };
-    lsSet('hp_demo_user', demoUser);
-  }
-
-  // 1. If Supabase is configured and user is NOT explicitly in demo mode, try Supabase session
-  if (isConfigured() && !demoMode) {
+  // 1. If Supabase is configured, check for active user session first
+  if (isConfigured()) {
     try {
       const sessionPromise = getSession();
       const timeoutPromise = new Promise(resolve => setTimeout(() => resolve(null), 1500));
@@ -126,10 +107,14 @@ async function initApp() {
     }
   }
 
-  // 2. If demo mode or demo user exists
-  if (demoMode || demoUser) {
-    showApp(demoUser || { id: 'demo-student', email: 'demo@homeoprep.app', name: 'Student', role: 'student' });
+  // 2. If user explicitly enabled Demo Mode in this browser session
+  const demoMode = lsGet('hp_demo_mode', false);
+  const demoUser = lsGet('hp_demo_user', null);
+
+  if (demoMode && demoUser) {
+    showApp(demoUser);
   } else {
+    // 3. Otherwise show Sign In / Create Account page
     showLoginPage();
   }
 
