@@ -267,7 +267,10 @@ function wireSettings() {
     if (!url || !key) return toast('Please enter both URL and key.', 'error');
     localStorage.setItem('hp_supabase_url', url);
     localStorage.setItem('hp_supabase_anon_key', key);
-    toast('✅ Supabase config saved! Reload the page to reconnect.', 'success', 5000);
+    lsSet('hp_demo_mode', false);
+    lsRemove('hp_demo_user');
+    toast('✅ Supabase connected! Exited Demo Mode. Reloading page…', 'success', 3000);
+    setTimeout(() => location.reload(), 600);
   });
 
   document.getElementById('export-data')?.addEventListener('click', exportData);

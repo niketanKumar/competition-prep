@@ -3,12 +3,11 @@ import { lsGet } from '../lib/utils.js';
 import { isConfigured } from '../lib/supabase.js';
 
 export function getAllQuestions() {
-  const demoMode = lsGet('hp_demo_mode', !isConfigured());
   const custom = lsGet('hp_questions', []);
-  if (demoMode) {
-    return [...SEED_QUESTIONS, ...custom];
+  if (isConfigured()) {
+    return [...custom];
   }
-  return [...custom];
+  return [...SEED_QUESTIONS, ...custom];
 }
 
 export const SEED_QUESTIONS = [
