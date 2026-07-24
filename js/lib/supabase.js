@@ -123,16 +123,41 @@ export async function fetchQuestions(filters = {}) {
   return await query.order('id', { ascending: true });
 }
 
+function sanitizeQuestion(q) {
+  const img = q.image_url || q.imageUrl || q.image || null;
+  const cleanObj = {
+    subject: q.subject,
+    exam: q.exam || 'Mock',
+    year: typeof q.year === 'number' ? q.year : (parseInt(q.year) || 2025),
+    q: q.q,
+    options: Array.isArray(q.options) ? q.options : [],
+    correct: typeof q.correct === 'number' ? q.correct : 0,
+    exp: q.exp || '',
+    image_url: img,
+    imageUrl: img,
+    image: img,
+    verified: q.verified !== false,
+    difficulty: q.difficulty || 'medium',
+    group_id: q.group_id || q.group || null,
+    ai_generated_exp: !!q.ai_generated_exp
+  };
+  if (q.id && typeof q.id === 'number' && q.id < 1000000000) {
+    cleanObj.id = q.id;
+  }
+  return cleanObj;
+}
+
 export async function upsertQuestion(question) {
   const sb = getSupabase();
   if (!sb) return { error: { message: 'Not connected' } };
-  return await sb.from('questions').upsert(question);
+  return await sb.from('questions').upsert(sanitizeQuestion(question));
 }
 
 export async function batchUpsertQuestions(questionsArray) {
   const sb = getSupabase();
   if (!sb) return { error: { message: 'Not connected' } };
-  return await sb.from('questions').upsert(questionsArray);
+  const cleanArray = (questionsArray || []).map(sanitizeQuestion);
+  return await sb.from('questions').upsert(cleanArray);
 }
 
 export async function deleteQuestion(id) {

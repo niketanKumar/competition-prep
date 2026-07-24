@@ -128,7 +128,7 @@ async function handleAiExtraction() {
           subject: normalizeSubjectId(q.subject || subject),
           exam: q.exam || exam || 'Mock',
           year: q.year || year || 2025,
-          group: group || 'Imported',
+          group_id: group || 'Imported',
           exp: q.exp || '',
           image: imgUrl,
           imageUrl: imgUrl,
