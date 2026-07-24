@@ -132,16 +132,16 @@ function setupAuthListener() {
   if (authListenerRegistered) return;
   authListenerRegistered = true;
   onAuthChange(async (event, session) => {
-    console.log('[Auth]', event);
-    if (event === 'SIGNED_IN' && session?.user) {
+    console.log('[Auth event]', event);
+    if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') && session?.user) {
       lsSet('hp_demo_mode', false);
       await loginUser(session.user);
     } else if (event === 'SIGNED_OUT') {
-      // Don't call logout() here — that would call signOut() again causing infinite loop
       currentUser = null;
       isAdmin = false;
       lsSet('hp_demo_mode', false);
       localStorage.removeItem('hp_demo_user');
+      localStorage.removeItem('hp_user_role');
       document.getElementById('sidebar')?.classList.add('hidden');
       document.getElementById('main-content')?.classList.add('hidden');
       document.getElementById('mobile-header')?.classList.add('hidden');
@@ -155,19 +155,27 @@ function setupAuthListener() {
 async function loginUser(authUser) {
   let profile = null;
   try {
-    const { data } = await fetchProfile(authUser.id);
+    const { data, error } = await fetchProfile(authUser.id);
+    if (error) {
+      console.error('[App] Profile fetch error:', error);
+    } else {
+      console.log('[App] Profile fetched successfully:', data);
+    }
     profile = data;
   } catch (e) {
-    console.warn('[App] Profile fetch warning:', e);
+    console.warn('[App] Profile fetch exception:', e);
   }
+
+  const role = profile?.role || authUser.user_metadata?.role || 'student';
 
   const user = {
     id:    authUser.id,
     email: authUser.email,
     name:  profile?.name || authUser.user_metadata?.full_name || authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'Student',
-    role:  profile?.role || authUser.user_metadata?.role || 'student',
+    role:  role,
   };
 
+  console.log('[App] Final user object:', user);
   showApp(user);
 }
 
@@ -231,6 +239,7 @@ window.logout = async function logout() {
   isAdmin = false;
   lsSet('hp_demo_mode', false);
   localStorage.removeItem('hp_demo_user');
+  localStorage.removeItem('hp_user_role');
   document.getElementById('sidebar')?.classList.add('hidden');
   document.getElementById('main-content')?.classList.add('hidden');
   document.getElementById('mobile-header')?.classList.add('hidden');
