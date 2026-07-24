@@ -25,6 +25,7 @@ let currentUser   = null;
 let currentPage   = null;
 let isAdmin       = false;
 let adminBarVisible = false;
+let authListenerRegistered = false;
 
 // ─── Router ──────────────────────────────────────────────────────────────────
 const ROUTES = {
@@ -122,12 +123,25 @@ async function initApp() {
 }
 
 function setupAuthListener() {
+  if (authListenerRegistered) return;
+  authListenerRegistered = true;
   onAuthChange(async (event, session) => {
+    console.log('[Auth]', event);
     if (event === 'SIGNED_IN' && session?.user) {
       lsSet('hp_demo_mode', false);
       await loginUser(session.user);
     } else if (event === 'SIGNED_OUT') {
-      logout();
+      // Don't call logout() here — that would call signOut() again causing infinite loop
+      currentUser = null;
+      isAdmin = false;
+      lsSet('hp_demo_mode', false);
+      localStorage.removeItem('hp_demo_user');
+      document.getElementById('sidebar')?.classList.add('hidden');
+      document.getElementById('main-content')?.classList.add('hidden');
+      document.getElementById('mobile-header')?.classList.add('hidden');
+      document.getElementById('admin-bar')?.classList.add('hidden');
+      document.body.classList.remove('admin-active');
+      showLoginPage();
     }
   });
 }
@@ -202,18 +216,21 @@ function hideLoading() {
   overlay.style.display = 'none';
 }
 
-window.logout = function logout() {
-  try { signOut(); } catch (e) {}
+window.logout = async function logout() {
+  // Immediately hide UI so user gets instant feedback
   currentUser = null;
-  isAdmin     = false;
+  isAdmin = false;
   lsSet('hp_demo_mode', false);
-  lsRemove('hp_demo_user');
+  localStorage.removeItem('hp_demo_user');
   document.getElementById('sidebar')?.classList.add('hidden');
   document.getElementById('main-content')?.classList.add('hidden');
   document.getElementById('mobile-header')?.classList.add('hidden');
   document.getElementById('admin-bar')?.classList.add('hidden');
   document.body.classList.remove('admin-active');
   showLoginPage();
+  // Sign out from Supabase AFTER showing login page (non-blocking)
+  // The onAuthChange SIGNED_OUT handler will fire but state is already cleared
+  try { await signOut(); } catch (e) { console.warn('signOut error', e); }
 };
 
 // ─── Navigation Wiring ────────────────────────────────────────────────────────

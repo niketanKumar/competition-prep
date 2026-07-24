@@ -34,6 +34,7 @@ export async function signUp(email, password, fullName) {
     email,
     password,
     options: {
+      emailRedirectTo: window.location.origin,
       data: {
         full_name: fullName,
         role: 'student'
