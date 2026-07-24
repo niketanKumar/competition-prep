@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#C4714F" />
+  <meta name="description" content="AI-powered AIAPGET Homoeopathy exam preparation — mock tests, flashcards, study planner, analytics." />
+  <title>HomeoPrep — AIAPGET Study Companion</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/main.css" />
+  <!-- Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <!-- Chart.js for analytics -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <!-- PDF.js for native PDF viewing & page text extraction -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    if (window.pdfjsLib) {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+  </script>
+</head>
+<body>
+  <!-- App Shell -->
+  <div id="app">
+    <!-- Admin Bar (shown to admins only) -->
+    <div id="admin-bar" class="admin-bar hidden">
+      <div class="admin-bar-inner">
+        <span class="admin-badge">⚡ Admin Mode</span>
+        <nav class="admin-nav">
+          <button class="admin-nav-btn" data-page="admin-dashboard">Dashboard</button>
+          <button class="admin-nav-btn" data-page="admin-questions">Questions</button>
+          <button class="admin-nav-btn" data-page="admin-upload">Upload</button>
+          <button class="admin-nav-btn" data-page="admin-flashcards">Flashcards</button>
+          <button class="admin-nav-btn" data-page="admin-students">Student Reports</button>
+          <button class="admin-nav-btn" data-page="admin-notifications">Notifications</button>
+          <button class="admin-nav-btn" data-page="admin-settings">Settings</button>
+        </nav>
+        <button class="admin-toggle-btn" id="toggle-admin-bar">Hide Admin Bar</button>
+      </div>
+    </div>
+
+    <!-- Sidebar Navigation -->
+    <aside id="sidebar" class="sidebar hidden">
+      <div class="sidebar-brand">
+        <div class="brand-icon">⚕</div>
+        <div class="brand-text">
+          <span class="brand-name">HomeoPrep</span>
+          <span class="brand-sub">AIAPGET Companion</span>
+        </div>
+      </div>
+
+      <div class="sidebar-user" id="sidebar-user">
+        <div class="user-avatar" id="user-avatar">S</div>
+        <div class="user-info">
+          <span class="user-name" id="user-name">Student</span>
+          <span class="user-role" id="user-role">Student</span>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a class="nav-item" data-page="dashboard" href="#/dashboard">
+          <span class="nav-icon">🏠</span><span class="nav-label">Dashboard</span>
+        </a>
+        <a class="nav-item" data-page="practice" href="#/practice">
+          <span class="nav-icon">📝</span><span class="nav-label">Practice</span>
+        </a>
+        <a class="nav-item" data-page="mock-test" href="#/mock-test">
+          <span class="nav-icon">⏱</span><span class="nav-label">Mock Test</span>
+        </a>
+        <a class="nav-item" data-page="pyq" href="#/pyq">
+          <span class="nav-icon">📅</span><span class="nav-label">PYQ</span>
+        </a>
+        <a class="nav-item" data-page="flashcards" href="#/flashcards">
+          <span class="nav-icon">🃏</span><span class="nav-label">Flashcards</span>
+        </a>
+        <a class="nav-item" data-page="documents" href="#/documents">
+          <span class="nav-icon">📚</span><span class="nav-label">Library & Reader</span>
+        </a>
+        <a class="nav-item" data-page="planner" href="#/planner">
+          <span class="nav-icon">🗓</span><span class="nav-label">Study Planner</span>
+        </a>
+        <a class="nav-item" data-page="analytics" href="#/analytics">
+          <span class="nav-icon">📊</span><span class="nav-label">Analytics</span>
+        </a>
+        <a class="nav-item" data-page="achievements" href="#/achievements">
+          <span class="nav-icon">🏆</span><span class="nav-label">Achievements</span>
+        </a>
+        <a class="nav-item" data-page="settings" href="#/settings">
+          <span class="nav-icon">⚙️</span><span class="nav-label">Settings</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-streak" id="sidebar-streak">
+        <span class="streak-fire">🔥</span>
+        <span class="streak-count" id="streak-count">0</span>
+        <span class="streak-label">day streak</span>
+      </div>
+
+      <button class="sidebar-admin-toggle" id="sidebar-admin-toggle" style="display:none">
+        ⚡ Admin Panel
+      </button>
+    </aside>
+
+    <!-- Mobile Top Bar -->
+    <header id="mobile-header" class="mobile-header hidden">
+      <button id="mobile-menu-btn" class="mobile-menu-btn">☰</button>
+      <span class="mobile-brand">⚕ HomeoPrep</span>
+      <div class="mobile-streak">🔥 <span id="mobile-streak">0</span></div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main id="main-content" class="main-content hidden">
+      <div id="page-container" class="page-container">
+        <!-- Pages rendered here by JS router -->
+      </div>
+    </main>
+
+    <!-- Login Page (shown when not authenticated) -->
+    <div id="login-page" class="login-wrapper">
+      <!-- Rendered by login.js -->
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay">
+      <div class="loading-spinner">
+        <div class="spinner-ring"></div>
+        <p class="loading-text">HomeoPrep</p>
+      </div>
+    </div>
+
+    <!-- Mobile Sidebar Overlay -->
+    <div id="sidebar-overlay" class="sidebar-overlay hidden"></div>
+  </div>
+
+  <script type="module" src="/js/app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      });
+    }
+  </script>
+</body>
+</html>

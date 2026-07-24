@@ -1,0 +1,487 @@
+// documents.js — Subject-wise User Library & Scrollable PDF Reader
+import { lsGet, lsSet, toast, esc } from '../lib/utils.js';
+import { SUBJECTS } from '../data/subjects.js';
+
+let activeDoc = null;
+let currentPageNum = 1;
+let activeBlobUrl = null;
+let viewMode = 'grid'; // 'grid' | 'reader'
+let activeSubjectFilter = 'all';
+
+function dataUrlToBlob(dataUrl) {
+  try {
+    const arr = dataUrl.split(',');
+    const mime = arr[0].match(/:(.*?);/)[1];
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new Blob([u8arr], { type: mime });
+  } catch (e) {
+    console.error('Error converting dataUrl to Blob:', e);
+    return null;
+  }
+}
+
+export function renderDocuments() {
+  const customDocs = lsGet('hp_custom_docs', []);
+
+  // If in reader view and activeDoc exists
+  if (viewMode === 'reader' && activeDoc) {
+    renderReaderView(activeDoc);
+    return;
+  }
+
+  // Otherwise render Subject-Grouped Library Grid
+  renderLibraryGrid(customDocs);
+}
+
+function renderLibraryGrid(customDocs) {
+  const container = document.getElementById('page-container');
+  if (!container) return;
+
+  const filteredDocs = activeSubjectFilter === 'all'
+    ? customDocs
+    : customDocs.filter(d => d.subject === activeSubjectFilter);
+
+  container.innerHTML = `
+    <div class="page-header flex justify-between items-center" style="flex-wrap:wrap;gap:var(--sp-4)">
+      <div>
+        <h1 class="page-title animate-fade-up">📚 Reference Library</h1>
+        <p class="page-subtitle animate-fade-up delay-1">Organize your study PDFs and reference materials by subject</p>
+      </div>
+      <button class="btn btn-primary btn-lg" id="upload-custom-doc-btn">📂 Upload PDF / Study Notes</button>
+    </div>
+
+    <!-- Subject Filter Bar -->
+    <div class="card animate-fade-up delay-1" style="margin-bottom:var(--sp-6);padding:var(--sp-4) var(--sp-6)">
+      <div style="display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap">
+        <span class="filter-label" style="margin-right:var(--sp-2)">Filter Subject:</span>
+        <button class="subject-chip ${activeSubjectFilter === 'all' ? 'active' : ''}" id="filter-sub-all">
+          📚 All Subjects (${customDocs.length})
+        </button>
+        ${SUBJECTS.map(s => {
+          const count = customDocs.filter(d => d.subject === s.id).length;
+          return `<button class="subject-chip ${activeSubjectFilter === s.id ? 'active' : ''}"
+                          style="background:${s.bg};color:${s.color}"
+                          data-subject="${s.id}">
+            ${s.icon} ${s.name} ${count > 0 ? `<strong>(${count})</strong>` : ''}
+          </button>`;
+        }).join('')}
+      </div>
+    </div>
+
+    <!-- Library Content Area Grouped by Subject -->
+    <div id="library-content-area" class="animate-fade-up delay-2">
+      ${renderSubjectGroups(filteredDocs, customDocs)}
+    </div>
+
+    <!-- Upload Document Modal -->
+    ${renderUploadModal()}
+  `;
+
+  wireGridEvents();
+}
+
+function renderSubjectGroups(filteredDocs, allCustomDocs) {
+  if (allCustomDocs.length === 0) {
+    return `
+      <div class="empty-state" style="padding:var(--sp-16)">
+        <span class="empty-state-icon">📚</span>
+        <h3>Your Library is Empty</h3>
+        <p style="margin:var(--sp-2) 0 var(--sp-5)">Upload PDF textbooks, lecture notes, or reference guides to view them by subject anytime.</p>
+        <button class="btn btn-primary btn-lg" id="empty-upload-btn">
+          📂 Upload Your First PDF File
+        </button>
+      </div>`;
+  }
+
+  if (filteredDocs.length === 0) {
+    return `
+      <div class="empty-state" style="padding:var(--sp-12)">
+        <span class="empty-state-icon">🔍</span>
+        <h3>No files uploaded for this subject</h3>
+        <p style="margin-top:var(--sp-2)">Click the Upload button above to add notes or PDF files for this subject.</p>
+      </div>`;
+  }
+
+  // Group filtered docs by subject
+  const groupMap = {};
+  filteredDocs.forEach(d => {
+    const sId = d.subject || 'general';
+    if (!groupMap[sId]) groupMap[sId] = [];
+    groupMap[sId].push(d);
+  });
+
+  return Object.keys(groupMap).map(sId => {
+    const subj = SUBJECTS.find(s => s.id === sId) || { id: sId, name: sId, icon: '📁', color: 'var(--primary)', bg: 'var(--primary-bg)' };
+    const docs = groupMap[sId];
+
+    return `
+      <div class="card" style="margin-bottom:var(--sp-6);border-top:4px solid ${subj.color}">
+        <div class="flex justify-between items-center" style="margin-bottom:var(--sp-5)">
+          <div style="display:flex;align-items:center;gap:var(--sp-2)">
+            <h3 style="font-family:var(--font-serif);color:var(--text)">${subj.icon} ${subj.name}</h3>
+          </div>
+          <span class="badge" style="background:${subj.bg};color:${subj.color}">${docs.length} file${docs.length > 1 ? 's' : ''}</span>
+        </div>
+
+        <div class="grid-3" style="gap:var(--sp-4)">
+          ${docs.map(d => `
+            <div class="card card-sm" style="background:var(--bg);border:1px solid var(--border);display:flex;flex-direction:column;justify-content:space-between">
+              <div>
+                <div class="flex justify-between items-center" style="margin-bottom:var(--sp-2)">
+                  <span class="badge ${d.type === 'pdf' ? 'badge-primary' : 'badge-secondary'}" style="font-size:.7rem">
+                    ${d.type === 'pdf' ? '📄 PDF Document' : '📝 Text Notes'}
+                  </span>
+                  <button class="btn btn-ghost btn-sm text-danger" style="padding:2px 6px;color:var(--error);font-size:1rem"
+                          onclick="deleteDocument('${d.id}')" title="Delete file">✕</button>
+                </div>
+                <h4 style="font-family:var(--font-serif);font-size:1rem;margin-bottom:4px;color:var(--text);overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">
+                  ${esc(d.title)}
+                </h4>
+                ${d.description ? `<p style="font-size:.8rem;color:var(--text-3);margin-bottom:var(--sp-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(d.description)}</p>` : ''}
+                <div style="font-size:.72rem;color:var(--text-3);margin:var(--sp-2) 0 var(--sp-4)">
+                  Uploaded: ${new Date(d.createdAt || Date.now()).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                </div>
+              </div>
+              <button class="btn btn-primary btn-sm w-full" onclick="openDocument('${d.id}')">
+                ${d.type === 'pdf' ? '📜 Open PDF Reader' : '📖 Read Notes'}
+              </button>
+            </div>
+          `).join('')}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function renderReaderView(doc) {
+  const container = document.getElementById('page-container');
+  if (!container) return;
+
+  const subj = SUBJECTS.find(s => s.id === doc.subject);
+  const isPdf = doc.type === 'pdf';
+
+  // Revoke old blob URL
+  if (activeBlobUrl) {
+    URL.revokeObjectURL(activeBlobUrl);
+    activeBlobUrl = null;
+  }
+
+  if (isPdf && doc.pdfDataUrl) {
+    const blob = dataUrlToBlob(doc.pdfDataUrl);
+    if (blob) activeBlobUrl = URL.createObjectURL(blob);
+  }
+
+  // Set global active document context for AI tutor
+  window.activeDocumentContext = {
+    title: doc.title,
+    author: doc.author || 'Custom Upload',
+    subject: doc.subject || 'homoeopathy',
+    type: doc.type,
+    text: !isPdf && doc.pages ? doc.pages[currentPageNum - 1]?.content : doc.title
+  };
+
+  container.innerHTML = `
+    <div class="page-header flex justify-between items-center" style="flex-wrap:wrap;gap:var(--sp-4);margin-bottom:var(--sp-4)">
+      <div style="display:flex;align-items:center;gap:var(--sp-3)">
+        <button class="btn btn-outline btn-sm" id="back-to-library-btn">← Back to Library</button>
+        ${subj ? `<span class="badge" style="background:${subj.bg};color:${subj.color}">${subj.icon} ${subj.name}</span>` : ''}
+      </div>
+      <button class="btn btn-secondary btn-sm" id="ask-ai-this-page">
+        🤖 Ask AI Tutor About "${esc(doc.title)}"
+      </button>
+    </div>
+
+    <!-- Reader Container -->
+    <div class="card animate-fade-up" style="padding:0;overflow:hidden">
+      <div style="padding:var(--sp-4) var(--sp-6);background:var(--bg-2);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <h2 style="font-family:var(--font-serif);font-size:1.3rem;color:var(--text)">${esc(doc.title)}</h2>
+          <span style="font-size:.8rem;color:var(--text-3)">${isPdf ? '📜 Continuous Scroll View' : `Section ${currentPageNum} of ${doc.pages?.length || 1}`}</span>
+        </div>
+        ${!isPdf && doc.pages?.length > 1 ? `
+          <div class="flex gap-2">
+            <button class="btn btn-outline btn-sm" id="reader-prev-btn" ${currentPageNum === 1 ? 'disabled' : ''}>← Previous</button>
+            <button class="btn btn-outline btn-sm" id="reader-next-btn" ${currentPageNum === doc.pages.length ? 'disabled' : ''}>Next →</button>
+          </div>
+        ` : ''}
+      </div>
+
+      <div class="document-reader-content" style="padding:${isPdf ? '0' : 'var(--sp-6)'};min-height:650px;display:flex;flex-direction:column;align-items:center;background:${isPdf ? '#323639' : 'white'}">
+        ${isPdf ? `
+          ${activeBlobUrl ? `
+            <object data="${activeBlobUrl}#toolbar=1&navpanes=0" type="application/pdf" style="width:100%;height:850px;border:none">
+              <iframe src="${activeBlobUrl}" style="width:100%;height:850px;border:none"></iframe>
+            </object>
+          ` : `
+            <div style="padding:var(--sp-12);color:white;text-align:center">
+              ⚠️ Unable to render PDF view. Try uploading the file again.
+            </div>
+          `}
+        ` : renderActiveTextPage(doc)}
+      </div>
+    </div>
+  `;
+
+  document.getElementById('back-to-library-btn')?.addEventListener('click', () => {
+    viewMode = 'grid';
+    renderDocuments();
+  });
+
+  document.getElementById('ask-ai-this-page')?.addEventListener('click', () => {
+    const botBtn = document.getElementById('ai-bot-btn');
+    if (botBtn) {
+      const drawer = document.getElementById('ai-bot-drawer');
+      if (drawer?.classList.contains('hidden')) botBtn.click();
+      const input = document.getElementById('ai-chat-input');
+      if (input) {
+        input.value = `What are the key concepts covered in "${doc.title}"?`;
+        input.focus();
+      }
+    }
+    toast(`🤖 AI Tutor opened with "${doc.title}" context!`, 'success');
+  });
+
+  document.getElementById('reader-prev-btn')?.addEventListener('click', () => {
+    if (currentPageNum > 1) { currentPageNum--; renderDocuments(); }
+  });
+  document.getElementById('reader-next-btn')?.addEventListener('click', () => {
+    if (currentPageNum < doc.pages.length) { currentPageNum++; renderDocuments(); }
+  });
+}
+
+function renderActiveTextPage(doc) {
+  if (!doc || !doc.pages || !doc.pages.length) return `<p style="padding:var(--sp-6)">No content available.</p>`;
+  const page = doc.pages[currentPageNum - 1] || doc.pages[0];
+
+  let formatted = esc(page.content)
+    .replace(/^### (.*$)/gim, '<h3 style="font-family:var(--font-serif);color:var(--primary);margin:var(--sp-4) 0 var(--sp-2)">$1</h3>')
+    .replace(/^## (.*$)/gim, '<h2 style="font-family:var(--font-serif);color:var(--text);margin:var(--sp-6) 0 var(--sp-3)">$1</h2>')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/- (.*$)/gim, '<li style="margin-left:var(--sp-5);margin-bottom:4px">$1</li>')
+    .replace(/\n\n/g, '<br><br>');
+
+  return `
+    <div style="width:100%;max-width:800px;text-align:left">
+      <h2 style="font-family:var(--font-serif);font-size:1.4rem;color:var(--primary);margin-bottom:var(--sp-6);border-bottom:2px solid var(--border);padding-bottom:var(--sp-3)">
+        ${esc(page.title || doc.title)}
+      </h2>
+      <div style="font-size:1rem;line-height:1.7;color:var(--text)">
+        ${formatted}
+      </div>
+    </div>`;
+}
+
+function renderUploadModal() {
+  return `
+    <div id="upload-doc-modal" class="modal-overlay hidden">
+      <div class="modal" style="max-width:600px">
+        <div class="modal-header">
+          <h3>📂 Upload Study PDF / Document</h3>
+          <button class="btn btn-ghost btn-icon" id="close-doc-modal">✕</button>
+        </div>
+        <div class="modal-body">
+          <div style="display:flex;gap:var(--sp-2);margin-bottom:var(--sp-4)">
+            <button class="btn btn-primary btn-sm" id="tab-pdf-file">📄 Upload PDF File</button>
+            <button class="btn btn-outline btn-sm" id="tab-paste-text">📝 Paste Notes / Text</button>
+          </div>
+
+          <form id="custom-doc-form" style="display:flex;flex-direction:column;gap:var(--sp-4)">
+            <div class="form-group">
+              <label class="form-label">Document Title / Name *</label>
+              <input class="form-input" type="text" id="cdf-title" placeholder="e.g. Allen's Keynotes - Materia Medica" required />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Assign to Subject *</label>
+              <select class="form-select" id="cdf-subject">
+                ${SUBJECTS.map(s => `<option value="${s.id}">${s.icon} ${s.name}</option>`).join('')}
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Description / Optional Notes</label>
+              <input class="form-input" type="text" id="cdf-desc" placeholder="e.g. High-yield drug summaries for AIAPGET 2026" />
+            </div>
+
+            <!-- PDF File Selector Zone -->
+            <div id="pdf-file-zone" class="upload-zone" style="padding:var(--sp-8)">
+              <span class="upload-icon">📂</span>
+              <div class="upload-text">Click to select a PDF file from your Mac</div>
+              <div class="upload-hint">Supports all PDF documents</div>
+              <input type="file" id="cdf-file-input" accept=".pdf" style="display:none" />
+              <div id="selected-pdf-filename" style="margin-top:var(--sp-3);font-weight:700;color:var(--primary)"></div>
+            </div>
+
+            <!-- Paste Text Zone -->
+            <div id="paste-text-zone" class="form-group hidden">
+              <label class="form-label">Document Content / Notes *</label>
+              <textarea class="form-textarea" id="cdf-content" rows="6" placeholder="Paste your study notes or chapter summary here..."></textarea>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" id="cancel-cdf">Cancel</button>
+          <button class="btn btn-primary" id="save-cdf">Save to Library & Open</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function wireGridEvents() {
+  document.getElementById('upload-custom-doc-btn')?.addEventListener('click', openUploadModal);
+  document.getElementById('empty-upload-btn')?.addEventListener('click', openUploadModal);
+  document.getElementById('close-doc-modal')?.addEventListener('click', closeUploadModal);
+  document.getElementById('cancel-cdf')?.addEventListener('click', closeUploadModal);
+
+  document.getElementById('filter-sub-all')?.addEventListener('click', () => {
+    activeSubjectFilter = 'all';
+    renderDocuments();
+  });
+
+  document.querySelectorAll('.subject-chip[data-subject]').forEach(chip => {
+    chip.addEventListener('click', () => {
+      activeSubjectFilter = chip.dataset.subject;
+      renderDocuments();
+    });
+  });
+
+  // Modal tab switching
+  const pdfZone   = document.getElementById('pdf-file-zone');
+  const pasteZone = document.getElementById('paste-text-zone');
+  const tabPdf    = document.getElementById('tab-pdf-file');
+  const tabPaste  = document.getElementById('tab-paste-text');
+  let currentTab  = 'pdf';
+
+  tabPdf?.addEventListener('click', (e) => {
+    e.preventDefault();
+    currentTab = 'pdf';
+    pdfZone?.classList.remove('hidden');
+    pasteZone?.classList.add('hidden');
+    if (tabPdf) tabPdf.className = 'btn btn-primary btn-sm';
+    if (tabPaste) tabPaste.className = 'btn btn-outline btn-sm';
+  });
+
+  tabPaste?.addEventListener('click', (e) => {
+    e.preventDefault();
+    currentTab = 'paste';
+    pdfZone?.classList.add('hidden');
+    pasteZone?.classList.remove('hidden');
+    if (tabPaste) tabPaste.className = 'btn btn-primary btn-sm';
+    if (tabPdf) tabPdf.className = 'btn btn-outline btn-sm';
+  });
+
+  // PDF Picker
+  const fileInput = document.getElementById('cdf-file-input');
+  pdfZone?.addEventListener('click', () => fileInput?.click());
+
+  let loadedPdfDataUrl = null;
+  fileInput?.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.type !== 'application/pdf') return toast('Please select a valid PDF file.', 'error');
+
+    const fnEl = document.getElementById('selected-pdf-filename');
+    if (fnEl) fnEl.textContent = `📄 Selected: ${file.name}`;
+
+    const titleInput = document.getElementById('cdf-title');
+    if (titleInput && !titleInput.value) {
+      titleInput.value = file.name.replace(/\.pdf$/i, '');
+    }
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      loadedPdfDataUrl = evt.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  // Save Modal Action
+  document.getElementById('save-cdf')?.addEventListener('click', () => {
+    const title   = document.getElementById('cdf-title')?.value.trim();
+    const subject = document.getElementById('cdf-subject')?.value;
+    const desc    = document.getElementById('cdf-desc')?.value.trim();
+
+    if (!title) return toast('Please enter a document title.', 'error');
+
+    let newDoc = null;
+
+    if (currentTab === 'pdf') {
+      if (!loadedPdfDataUrl) return toast('Please select a PDF file first.', 'error');
+      newDoc = {
+        id: `pdf_${Date.now()}`,
+        title,
+        subject,
+        description: desc,
+        author: 'Uploaded PDF',
+        type: 'pdf',
+        pdfDataUrl: loadedPdfDataUrl,
+        createdAt: new Date().toISOString(),
+        pages: []
+      };
+    } else {
+      const content = document.getElementById('cdf-content')?.value.trim();
+      if (!content) return toast('Please paste your document content.', 'error');
+      newDoc = {
+        id: `cd_${Date.now()}`,
+        title,
+        subject,
+        description: desc,
+        author: 'Custom Notes',
+        type: 'text',
+        createdAt: new Date().toISOString(),
+        pages: [{ pageNum: 1, title, content }]
+      };
+    }
+
+    let custom = lsGet('hp_custom_docs', []);
+    if (!Array.isArray(custom)) custom = [];
+    custom.unshift(newDoc);
+    lsSet('hp_custom_docs', custom);
+
+    activeDoc = newDoc;
+    currentPageNum = 1;
+    viewMode = 'reader';
+    closeUploadModal();
+    toast('✅ Document saved to Library!', 'success');
+    renderDocuments();
+  });
+}
+
+function openUploadModal() {
+  document.getElementById('upload-doc-modal')?.classList.remove('hidden');
+}
+
+function closeUploadModal() {
+  document.getElementById('upload-doc-modal')?.classList.add('hidden');
+}
+
+window.openDocument = (id) => {
+  const custom = lsGet('hp_custom_docs', []);
+  const found = custom.find(d => d.id === id);
+  if (found) {
+    activeDoc = found;
+    currentPageNum = 1;
+    viewMode = 'reader';
+    renderDocuments();
+  }
+};
+
+window.deleteDocument = (id) => {
+  if (!confirm('Are you sure you want to delete this document?')) return;
+  let custom = lsGet('hp_custom_docs', []);
+  custom = custom.filter(d => d.id !== id);
+  lsSet('hp_custom_docs', custom);
+
+  if (activeDoc?.id === id) {
+    activeDoc = null;
+    viewMode = 'grid';
+  }
+
+  toast('Document deleted.', 'default');
+  renderDocuments();
+};
