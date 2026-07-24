@@ -152,7 +152,7 @@ function setupAuthListener() {
   });
 }
 
-async function loginUser(authUser) {
+export async function loginUser(authUser) {
   let profile = null;
   try {
     const { data, error } = await fetchProfile(authUser.id);
