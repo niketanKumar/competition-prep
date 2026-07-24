@@ -83,6 +83,8 @@ window.navigate = function(page, params = '') {
 
 // ─── Auth Flow ───────────────────────────────────────────────────────────────
 async function initApp() {
+  // Expose loginUser globally so login.js can call it without circular imports
+  window.loginUser = loginUser;
   window.addEventListener('hp:login', (e) => {
     if (e.detail?.demo) {
       const demoUser = lsGet('hp_demo_user') || { id: 'demo-student', email: 'demo@homeoprep.app', name: 'Student', role: 'student' };

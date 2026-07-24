@@ -1,7 +1,7 @@
 // login.js — Login & Self-Registration Page
 import { signIn, signUp, isConfigured } from '../lib/supabase.js';
 import { lsSet, toast } from '../lib/utils.js';
-import { loginUser } from '../app.js';
+// Note: loginUser is accessed via window.loginUser to avoid circular import with app.js
 
 let activeTab = 'signin'; // 'signin' or 'signup'
 
@@ -170,7 +170,9 @@ function wireFormSubmissions() {
       } else if (data?.user) {
         lsSet('hp_demo_mode', false);
         toast('🎉 Signed in successfully!', 'success');
-        await loginUser(data.user);
+        if (typeof window.loginUser === 'function') {
+          await window.loginUser(data.user);
+        }
       }
     });
   }
