@@ -1,11 +1,40 @@
 // questions.js — Seed question bank with sample AIAPGET-style questions
-import { lsGet } from '../lib/utils.js';
-import { isConfigured } from '../lib/supabase.js';
+import { lsGet, lsSet } from '../lib/utils.js';
+import { isConfigured, fetchQuestions } from '../lib/supabase.js';
+
+let cloudQuestionsCache = null;
+
+export async function loadCloudQuestions() {
+  if (isConfigured()) {
+    try {
+      const { data } = await fetchQuestions({});
+      if (data && data.length) {
+        cloudQuestionsCache = data.map(q => ({
+          ...q,
+          options: typeof q.options === 'string' ? JSON.parse(q.options) : (q.options || []),
+          image: q.image_url || q.imageUrl || q.image || null,
+          imageUrl: q.image_url || q.imageUrl || q.image || null,
+        }));
+        lsSet('hp_cloud_questions', cloudQuestionsCache);
+        return cloudQuestionsCache;
+      }
+    } catch (e) {
+      console.warn('[Questions] Failed to fetch cloud questions:', e);
+    }
+  }
+  return null;
+}
 
 export function getAllQuestions() {
   const custom = lsGet('hp_questions', []);
+  const cloud  = cloudQuestionsCache || lsGet('hp_cloud_questions', []);
+
   if (isConfigured()) {
-    return [...custom];
+    if (cloud.length > 0) {
+      return [...cloud, ...custom];
+    }
+    // Fallback if cloud hasn't returned yet or is empty
+    return [...SEED_QUESTIONS, ...custom];
   }
   return [...SEED_QUESTIONS, ...custom];
 }

@@ -19,6 +19,7 @@ import { renderAdminStudents }  from './pages/admin/students.js';
 import { renderAdminNotifications } from './pages/admin/notifications.js';
 import { lsGet, lsSet, getStreak, toast } from './lib/utils.js';
 import { getSession, onAuthChange, signOut, fetchProfile, isConfigured, getAuthUser } from './lib/supabase.js';
+import { loadCloudQuestions } from './data/questions.js';
 
 // ─── App State ───────────────────────────────────────────────────────────────
 let currentUser   = null;
@@ -230,6 +231,9 @@ function showApp(user) {
     document.body.classList.remove('admin-active');
     adminBarVisible = false;
   }
+
+  // Fetch cloud question bank asynchronously so questions are ready for Practice & Mock Tests
+  loadCloudQuestions();
 
   // Wire navigation & AI Bot
   wireNavigation();
