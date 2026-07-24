@@ -1,7 +1,7 @@
 // pyq.js — Previous Year Questions organized by year and subject
 import { lsGet, pct } from '../lib/utils.js';
 import { SUBJECTS } from '../data/subjects.js';
-import { SEED_QUESTIONS } from '../data/questions.js';
+import { SEED_QUESTIONS, getAllQuestions } from '../data/questions.js';
 
 export function renderPYQ() {
   const all = getAllQuestions();
@@ -109,9 +109,4 @@ function renderGroups(groups, all) {
       </div>`;
     }).join('')}
   </div>`;
-}
-
-function getAllQuestions() {
-  const custom = lsGet('hp_questions', []);
-  return [...SEED_QUESTIONS, ...custom];
 }

@@ -1,7 +1,7 @@
 // mockTest.js — Full mock test engine with timer and +4/-1 scoring
 import { lsGet, lsSet, toast, esc, formatDuration, calcScore, scoreGrade, pct, renderRichContent } from '../lib/utils.js';
 import { SUBJECTS, TOTAL_QUESTIONS, TEST_DURATION, MARKS_CORRECT, MARKS_WRONG } from '../data/subjects.js';
-import { SEED_QUESTIONS } from '../data/questions.js';
+import { SEED_QUESTIONS, getAllQuestions } from '../data/questions.js';
 import { saveTestSession, getSession, isConfigured as isSupabaseConfigured } from '../lib/supabase.js';
 
 let testState = null;

@@ -1,7 +1,7 @@
 // admin/questions.js — Admin question management panel
 import { lsGet, lsSet, toast, esc } from '../../lib/utils.js';
 import { SUBJECTS, normalizeSubjectId } from '../../data/subjects.js';
-import { SEED_QUESTIONS } from '../../data/questions.js';
+import { SEED_QUESTIONS, getAllQuestions } from '../../data/questions.js';
 import { generateExplanation, parseQuestionsFromText, isAiConfigured } from '../../lib/ai.js';
 import { upsertQuestion, batchUpsertQuestions, deleteQuestion as deleteQuestionCloud, isConfigured as isSupabaseConfigured } from '../../lib/supabase.js';
 
@@ -169,9 +169,6 @@ function getQStats() {
   </div>`).join('');
 }
 
-function getAllQuestions() {
-  const custom = lsGet('hp_questions', []);
-  return [...SEED_QUESTIONS, ...custom];
 }
 
 function renderQuestionList() {

@@ -1,7 +1,7 @@
 // practice.js — Subject-wise practice mode
 import { lsGet, lsSet, toast, esc, pct, checkAchievements, renderRichContent } from '../lib/utils.js';
 import { SUBJECTS, MARKS_CORRECT, MARKS_WRONG } from '../data/subjects.js';
-import { SEED_QUESTIONS } from '../data/questions.js';
+import { SEED_QUESTIONS, getAllQuestions } from '../data/questions.js';
 import { generateExplanation, isAiConfigured } from '../lib/ai.js';
 import { toggleBookmarkCloud, getSession, isConfigured as isSupabaseConfigured } from '../lib/supabase.js';
 
@@ -109,11 +109,6 @@ function applyFilters() {
   if (label) label.textContent = `${questions.length} question${questions.length !== 1 ? 's' : ''} found`;
 
   showQuestion();
-}
-
-function getAllQuestions() {
-  const custom = lsGet('hp_questions', []);
-  return [...SEED_QUESTIONS, ...custom];
 }
 
 // Original explanation = any exp that was NOT AI-generated

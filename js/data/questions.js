@@ -1,4 +1,16 @@
 // questions.js — Seed question bank with sample AIAPGET-style questions
+import { lsGet } from '../lib/utils.js';
+import { isConfigured } from '../lib/supabase.js';
+
+export function getAllQuestions() {
+  const demoMode = lsGet('hp_demo_mode', !isConfigured());
+  const custom = lsGet('hp_questions', []);
+  if (demoMode) {
+    return [...SEED_QUESTIONS, ...custom];
+  }
+  return [...custom];
+}
+
 export const SEED_QUESTIONS = [
   // ── MATERIA MEDICA (16 per exam) ────────────────────────────────────────
   {
