@@ -132,28 +132,20 @@ export function renderSettings() {
         <button class="btn btn-primary btn-sm" id="save-exam-date">Save Exam Date</button>
       </div>
 
-      <!-- Supabase Configuration -->
+      <!-- Supabase Backend Status -->
       <div class="card animate-fade-up delay-3">
-        <h3 style="margin-bottom:var(--sp-2)">🗄️ Supabase Backend</h3>
-        <p style="font-size:.85rem;color:var(--text-3);margin-bottom:var(--sp-5)">
-          Connect to Supabase to sync your progress across devices. Create a free project at
-          <a href="https://supabase.com" target="_blank" style="color:var(--primary)">supabase.com</a>
+        <h3 style="margin-bottom:var(--sp-2)">🗄️ Cloud Database Sync</h3>
+        <p style="font-size:.85rem;color:var(--text-3);margin-bottom:var(--sp-4)">
+          HomeoPrep is connected to your central cloud database for multi-device progress syncing and secure backup.
         </p>
-        ${isConfigured() ? `<div style="padding:var(--sp-3);background:var(--success-bg);border:1px solid var(--success);border-radius:var(--r-md);margin-bottom:var(--sp-4);font-size:.85rem;color:var(--success)">
-          ✅ Connected to Supabase
-        </div>` : `<div style="padding:var(--sp-3);background:var(--amber-bg);border:1px solid var(--amber);border-radius:var(--r-md);margin-bottom:var(--sp-4);font-size:.85rem;color:var(--amber)">
-          ⚠️ Running in offline/demo mode. Set up Supabase for multi-device sync.
-        </div>`}
-        <div style="display:flex;flex-direction:column;gap:var(--sp-4)">
+        <div style="padding:var(--sp-3);background:var(--success-bg);border:1px solid var(--success);border-radius:var(--r-md);font-size:.85rem;color:var(--success);display:flex;align-items:center;gap:8px">
+          <span>🟢</span> <strong>Connected to Cloud Database</strong>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:var(--sp-3);margin-top:var(--sp-4)">
           <div class="form-group">
-            <label class="form-label">Supabase Project URL</label>
-            <input class="form-input" type="text" id="s-sb-url" value="${sbUrl}" placeholder="https://xxxx.supabase.co" />
+            <label class="form-label" style="font-size:.8rem;color:var(--text-3)">Active Database Endpoint</label>
+            <input class="form-input" type="text" value="${sbUrl}" readonly disabled style="background:var(--bg-2);cursor:not-allowed;opacity:0.75;font-family:monospace;font-size:0.85rem" />
           </div>
-          <div class="form-group">
-            <label class="form-label">Supabase Anon Key</label>
-            <input class="form-input" type="password" id="s-sb-key" value="${sbKey}" placeholder="eyJhbGciO..." />
-          </div>
-          <button class="btn btn-primary btn-sm" id="save-supabase">Save & Reconnect</button>
         </div>
       </div>
 
