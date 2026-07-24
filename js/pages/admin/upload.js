@@ -43,7 +43,8 @@ export function renderAdminUpload() {
             <div class="form-group">
               <label class="form-label">Exam Tag *</label>
               <select class="form-select" id="pdf-exam">
-                <option value="AIAPGET" selected>⚕️ AIAPGET</option>
+                <option value="Mock" selected>📝 Mock Test</option>
+                <option value="AIAPGET">⚕️ AIAPGET</option>
                 <option value="UPSC">🏛️ UPSC (Homoeopathy MO)</option>
                 <option value="State PSC">🏛️ State PSC / Medical Officer</option>
                 <option value="NIH/PG">🎓 NIH / PG Entrance</option>
@@ -101,7 +102,7 @@ function wireAdminUpload() {
 async function handleAiExtraction() {
   const text    = document.getElementById('raw-text-input').value.trim();
   const subject = document.getElementById('pdf-subject').value;
-  const exam    = document.getElementById('pdf-exam').value || 'AIAPGET';
+  const exam    = document.getElementById('pdf-exam').value || 'Mock';
   const year    = parseInt(document.getElementById('pdf-year').value) || null;
   const group   = document.getElementById('pdf-group').value.trim() || null;
 
@@ -125,7 +126,7 @@ async function handleAiExtraction() {
           options: q.options || [],
           correct: typeof q.correct === 'number' ? q.correct : 0,
           subject: normalizeSubjectId(q.subject || subject),
-          exam: q.exam || exam || 'AIAPGET',
+          exam: q.exam || exam || 'Mock',
           year: q.year || year || 2025,
           group: group || 'Imported',
           exp: q.exp || '',
