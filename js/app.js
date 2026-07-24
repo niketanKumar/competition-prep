@@ -219,9 +219,16 @@ function showApp(user) {
   // Admin setup
   if (isAdmin) {
     document.getElementById('admin-bar').classList.remove('hidden');
+    document.getElementById('admin-bar').style.display = '';
     document.getElementById('sidebar-admin-toggle').style.display = 'block';
     document.body.classList.add('admin-active');
     adminBarVisible = true;
+  } else {
+    document.getElementById('admin-bar').classList.add('hidden');
+    document.getElementById('admin-bar').style.display = 'none';
+    document.getElementById('sidebar-admin-toggle').style.display = 'none';
+    document.body.classList.remove('admin-active');
+    adminBarVisible = false;
   }
 
   // Wire navigation & AI Bot

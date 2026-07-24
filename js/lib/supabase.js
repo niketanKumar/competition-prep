@@ -93,6 +93,18 @@ export async function fetchProfile(userId) {
   return { data, error };
 }
 
+export async function fetchAllProfiles() {
+  const sb = getSupabase();
+  if (!sb) return { data: [], error: null };
+  return await sb.from('profiles').select('*').order('created_at', { ascending: false });
+}
+
+export async function fetchAllTestSessions() {
+  const sb = getSupabase();
+  if (!sb) return { data: [], error: null };
+  return await sb.from('test_sessions').select('*').order('completed_at', { ascending: false });
+}
+
 export async function updateProfile(userId, updates) {
   const sb = getSupabase();
   if (!sb) return { error: null };
