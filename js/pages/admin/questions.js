@@ -180,8 +180,6 @@ function getQStats() {
   </div>`).join('');
 }
 
-}
-
 function renderQuestionList() {
   let all = getAllQuestions();
   if (filterState.subject !== 'all') all = all.filter(q => q.subject === filterState.subject);
