@@ -26,23 +26,34 @@ export async function loadCloudQuestions() {
 }
 
 export function getAllQuestions() {
-  const custom   = lsGet('hp_questions', []);
-  const disabled = lsGet('hp_deleted_question_ids', []);
-  const cloud    = cloudQuestionsCache || lsGet('hp_cloud_questions', []);
+  const rawCustom = lsGet('hp_questions', []);
+  const disabled  = lsGet('hp_deleted_question_ids', []);
+  const cloud     = cloudQuestionsCache || lsGet('hp_cloud_questions', []);
+
+  // Ensure custom questions have non-colliding IDs so seed questions (1..386) never shadow custom questions (1..1020)
+  const custom = rawCustom.map(cq => {
+    if (!cq || cq.id === undefined || cq.id === null) return cq;
+    const sId = String(cq.id);
+    if (!sId.startsWith('cq_') && !sId.startsWith('seed_')) {
+      return { ...cq, id: `cq_${sId}` };
+    }
+    return cq;
+  });
 
   let all = [];
   if (isConfigured() && cloud.length > 0) {
-    all = [...cloud, ...custom];
+    all = [...custom, ...cloud];
   } else {
-    all = [...SEED_QUESTIONS, ...custom];
+    all = [...custom, ...SEED_QUESTIONS];
   }
 
   const seen = new Set();
   return all.filter(q => {
     if (!q || q.id === undefined || q.id === null) return false;
-    if (disabled.includes(q.id) || disabled.includes(String(q.id)) || disabled.includes(Number(q.id))) return false;
-    if (seen.has(q.id)) return false;
-    seen.add(q.id);
+    const qIdStr = String(q.id);
+    if (disabled.includes(q.id) || disabled.includes(qIdStr) || disabled.includes(Number(q.id))) return false;
+    if (seen.has(qIdStr)) return false;
+    seen.add(qIdStr);
     return true;
   });
 }
