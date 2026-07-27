@@ -3,6 +3,7 @@ import { lsGet, lsSet, toast, esc, renderRichContent } from '../../lib/utils.js'
 import { SUBJECTS, SUBJECT_MAP, normalizeSubjectId } from '../../data/subjects.js';
 import { parseQuestionsFromText, isAiConfigured } from '../../lib/ai.js';
 import { batchUpsertQuestions, isConfigured as isSupabaseConfigured } from '../../lib/supabase.js';
+import { convertQuestionToFlashcard } from '../../data/flashcards.js';
 
 let parsedQuestions = [];
 
@@ -197,16 +198,23 @@ async function saveAllExtracted() {
   const updated = [...custom, ...parsedQuestions];
   lsSet('hp_questions', updated);
 
+  // Auto-generate flashcards for all newly uploaded questions
+  try {
+    const customFc = lsGet('hp_flashcards', []);
+    const newFcs = parsedQuestions.map(convertQuestionToFlashcard);
+    lsSet('hp_flashcards', [...customFc, ...newFcs]);
+  } catch (e) {}
+
   if (isSupabaseConfigured()) {
     toast(`⏳ Syncing ${parsedQuestions.length} questions to Supabase Cloud…`, 'default', 2000);
     const { error } = await batchUpsertQuestions(parsedQuestions);
     if (error) {
       toast(`⚠️ Saved locally, but Supabase sync failed: ${error.message}`, 'warning', 5000);
     } else {
-      toast(`🎉 Saved & synced ${parsedQuestions.length} new questions to Supabase Cloud!`, 'success', 5000);
+      toast(`🎉 Saved & synced ${parsedQuestions.length} new questions & flashcards!`, 'success', 5000);
     }
   } else {
-    toast(`🎉 Saved ${parsedQuestions.length} new questions to your Question Bank!`, 'success', 5000);
+    toast(`🎉 Saved ${parsedQuestions.length} new questions & flashcards!`, 'success', 5000);
   }
 
   parsedQuestions = [];

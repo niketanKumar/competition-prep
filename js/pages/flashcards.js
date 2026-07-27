@@ -1,13 +1,14 @@
-// flashcards.js — Spaced repetition flashcard system
+// flashcards.js — Spaced repetition & Adaptive Flashcard System
 import { lsGet, lsSet, toast, esc } from '../lib/utils.js';
 import { SUBJECTS } from '../data/subjects.js';
-import { SEED_FLASHCARDS } from '../data/flashcards.js';
+import { SEED_FLASHCARDS, getAdaptiveFlashcards } from '../data/flashcards.js';
+import { getAllQuestions } from '../data/questions.js';
 import { sm2, isDue, sortByDue } from '../lib/sm2.js';
 
 let deck = [];
 let currentIdx = 0;
 let isFlipped = false;
-let mode = 'due'; // 'due' | 'all'
+let mode = 'adaptive'; // 'adaptive' | 'weak' | 'unread' | 'due' | 'all'
 let activeSubject = 'all';
 
 export function renderFlashcards() {
@@ -18,8 +19,8 @@ export function renderFlashcards() {
 
   container.innerHTML = `
     <div class="page-header">
-      <h1 class="page-title animate-fade-up">🃏 Flashcards</h1>
-      <p class="page-subtitle animate-fade-up delay-1">Review drug keynotes, aphorisms, and clinical facts with spaced repetition</p>
+      <h1 class="page-title animate-fade-up">🃏 Smart Adaptive Flashcards</h1>
+      <p class="page-subtitle animate-fade-up delay-1">Auto-generated from uploaded MCQs & customized to your weak areas and unread topics</p>
     </div>
 
     <!-- Stats Row -->
@@ -27,20 +28,29 @@ export function renderFlashcards() {
       ${renderStatsRow()}
     </div>
 
-    <!-- Mode & Filter -->
+    <!-- Mode & Filter Bar -->
     <div class="card animate-fade-up delay-2" style="margin-bottom:var(--sp-6);padding:var(--sp-4) var(--sp-6)">
-      <div style="display:flex;align-items:center;gap:var(--sp-4);flex-wrap:wrap">
-        <span class="filter-label">Mode:</span>
-        <button class="btn ${mode === 'due' ? 'btn-primary' : 'btn-ghost'} btn-sm" id="mode-due">
+      <div style="display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap">
+        <span class="filter-label" style="font-weight:700">Review Mode:</span>
+        <button class="btn ${mode === 'adaptive' ? 'btn-primary' : 'btn-outline'} btn-sm" id="mode-adaptive">
+          🎯 Smart Adaptive
+        </button>
+        <button class="btn ${mode === 'weak' ? 'btn-primary' : 'btn-outline'} btn-sm" id="mode-weak">
+          🔥 Weak Qs Only
+        </button>
+        <button class="btn ${mode === 'unread' ? 'btn-primary' : 'btn-outline'} btn-sm" id="mode-unread">
+          🌱 Unread Topics
+        </button>
+        <button class="btn ${mode === 'due' ? 'btn-primary' : 'btn-outline'} btn-sm" id="mode-due">
           🔴 Due Today (${getDueCount()})
         </button>
-        <button class="btn ${mode === 'all' ? 'btn-primary' : 'btn-ghost'} btn-sm" id="mode-all">
-          🔀 All Cards (${getAllCards().length})
+        <button class="btn ${mode === 'all' ? 'btn-primary' : 'btn-outline'} btn-sm" id="mode-all">
+          📚 All Cards
         </button>
+
         <div style="width:1px;height:24px;background:var(--border);margin:0 var(--sp-2)"></div>
-        <span class="filter-label">Subject:</span>
         <select class="form-select" style="width:auto;height:34px;padding:0 28px 0 10px;font-size:.82rem" id="fc-subject-filter">
-          <option value="all">All Subjects</option>
+          <option value="all">📚 All Subjects</option>
           ${SUBJECTS.map(s => `<option value="${s.id}" ${activeSubject === s.id ? 'selected' : ''}>${s.icon} ${s.name}</option>`).join('')}
         </select>
       </div>
@@ -53,22 +63,17 @@ export function renderFlashcards() {
   `;
 
   wireControls();
-  wireCardEvents();
-}
-
 function wireControls() {
-  document.getElementById('mode-due')?.addEventListener('click', () => {
-    mode = 'due';
-    syncModeButtons();
-    loadDeck();
-    updateAll();
+  const modes = ['adaptive', 'weak', 'unread', 'due', 'all'];
+  modes.forEach(m => {
+    document.getElementById(`mode-${m}`)?.addEventListener('click', () => {
+      mode = m;
+      syncModeButtons();
+      loadDeck();
+      updateAll();
+    });
   });
-  document.getElementById('mode-all')?.addEventListener('click', () => {
-    mode = 'all';
-    syncModeButtons();
-    loadDeck();
-    updateAll();
-  });
+
   document.getElementById('fc-subject-filter')?.addEventListener('change', (e) => {
     activeSubject = e.target.value;
     loadDeck();
@@ -77,34 +82,38 @@ function wireControls() {
 }
 
 function syncModeButtons() {
-  const btnDue = document.getElementById('mode-due');
-  const btnAll = document.getElementById('mode-all');
-  if (btnDue) btnDue.className = `btn ${mode === 'due' ? 'btn-primary' : 'btn-ghost'} btn-sm`;
-  if (btnAll) btnAll.className = `btn ${mode === 'all' ? 'btn-primary' : 'btn-ghost'} btn-sm`;
+  const modes = ['adaptive', 'weak', 'unread', 'due', 'all'];
+  modes.forEach(m => {
+    const btn = document.getElementById(`mode-${m}`);
+    if (btn) btn.className = `btn ${mode === m ? 'btn-primary' : 'btn-outline'} btn-sm`;
+  });
 }
 
 function getAllCards() {
   let states = lsGet('hp_flashcard_states', {});
   if (!states || typeof states !== 'object' || Array.isArray(states)) states = {};
 
-  let custom = lsGet('hp_flashcards', []);
-  if (!Array.isArray(custom)) custom = [];
+  const custom = lsGet('hp_flashcards', []);
+  const allQs  = getAllQuestions();
 
-  const seeds = Array.isArray(SEED_FLASHCARDS) ? SEED_FLASHCARDS : [];
+  const adaptiveList = getAdaptiveFlashcards(mode, allQs, custom);
 
-  return [...seeds, ...custom].map(c => ({
+  return adaptiveList.map(c => ({
     ...c,
     sm2: states[c.id] || null,
   }));
 }
 
 function getDueCount() {
-  return getAllCards().filter(isDue).length;
+  let states = lsGet('hp_flashcard_states', {});
+  const custom = lsGet('hp_flashcards', []);
+  const allQs  = getAllQuestions();
+  return getAdaptiveFlashcards('all', allQs, custom).map(c => ({ ...c, sm2: states[c.id] || null })).filter(isDue).length;
 }
 
 function renderStatsRow() {
   const allCards = getAllCards();
-  const dueCount = allCards.filter(isDue).length;
+  const dueCount = getDueCount();
   const reviewedCount = allCards.filter(c => c.sm2?.repetitions > 0).length;
   const masteredCount = allCards.filter(c => c.sm2?.repetitions >= 5).length;
 
@@ -115,7 +124,7 @@ function renderStatsRow() {
     </div>
     <div class="card" style="text-align:center">
       <div style="font-size:1.8rem;font-weight:700;color:var(--primary)">${allCards.length}</div>
-      <div style="font-size:.8rem;color:var(--text-3)">Total Cards</div>
+      <div style="font-size:.8rem;color:var(--text-3)">Available Cards</div>
     </div>
     <div class="card" style="text-align:center">
       <div style="font-size:1.8rem;font-weight:700;color:var(--secondary)">${reviewedCount}</div>
@@ -132,7 +141,7 @@ function loadDeck() {
   let all = getAllCards();
   if (activeSubject !== 'all') all = all.filter(c => c.subject === activeSubject);
   if (mode === 'due') all = all.filter(isDue);
-  deck = sortByDue(all);
+  deck = mode === 'due' ? sortByDue(all) : all;
   currentIdx = 0;
   isFlipped = false;
 }
@@ -183,12 +192,14 @@ function renderCardArea() {
       <div class="flashcard-scene ${isFlipped ? 'flipped' : ''}" id="flashcard-scene" style="cursor:pointer">
         <div class="flashcard-inner">
           <div class="flashcard-face flashcard-front">
+            ${card.badge ? `<span class="badge ${card.badge.includes('Weak') ? 'badge-error' : card.badge.includes('New') ? 'badge-amber' : 'badge-neutral'}" style="position:absolute;top:var(--sp-4);right:var(--sp-4)">${card.badge}</span>` : ''}
             <span class="flashcard-face-label">QUESTION</span>
-            <p class="flashcard-text">${esc(card.front)}</p>
+            <p class="flashcard-text" style="white-space:pre-line">${esc(card.front)}</p>
             ${subj ? `<span class="flashcard-subject badge" style="background:${subj.bg};color:${subj.color}">${subj.icon} ${subj.name}</span>` : ''}
             <div style="position:absolute;bottom:var(--sp-10);font-size:.8rem;color:var(--text-3);opacity:.6">Tap card to reveal answer 👁️</div>
           </div>
           <div class="flashcard-face flashcard-back">
+            ${card.badge ? `<span class="badge ${card.badge.includes('Weak') ? 'badge-error' : card.badge.includes('New') ? 'badge-amber' : 'badge-neutral'}" style="position:absolute;top:var(--sp-4);right:var(--sp-4)">${card.badge}</span>` : ''}
             <span class="flashcard-face-label">ANSWER</span>
             <p class="flashcard-text" style="white-space:pre-line">${esc(card.back)}</p>
             ${subj ? `<span class="flashcard-subject badge" style="background:${subj.bg};color:${subj.color}">${subj.icon} ${subj.name}</span>` : ''}
