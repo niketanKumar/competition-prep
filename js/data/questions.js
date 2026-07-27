@@ -17,7 +17,7 @@ export async function loadCloudQuestions() {
   if (isConfigured()) {
     try {
       const { data } = await fetchQuestions({});
-      if (data && data.length) {
+      if (Array.isArray(data)) {
         setCloudQuestionsCache(data);
         lsSet('hp_cloud_questions', cloudQuestionsCache);
         return cloudQuestionsCache;
@@ -31,9 +31,9 @@ export async function loadCloudQuestions() {
 
 export function getAllQuestions() {
   const custom = lsGet('hp_questions', []);
-  const cloud  = cloudQuestionsCache || lsGet('hp_cloud_questions', null);
+  const cloud  = cloudQuestionsCache !== null ? cloudQuestionsCache : lsGet('hp_cloud_questions', null);
 
-  if (isConfigured() && cloud && cloud.length > 0) {
+  if (isConfigured() && Array.isArray(cloud)) {
     const seen = new Set();
     return cloud.filter(q => {
       if (!q || q.id === undefined || q.id === null) return false;

@@ -11,7 +11,7 @@ export async function loadCloudFlashcards() {
   if (isConfigured()) {
     try {
       const { data } = await fetchFlashcardsCloud();
-      if (data && data.length) {
+      if (Array.isArray(data)) {
         setCloudFlashcardsCache(data);
         lsSet('hp_cloud_flashcards', cloudFlashcardsCache);
         return cloudFlashcardsCache;
@@ -152,7 +152,7 @@ export function getAdaptiveFlashcards(mode = 'adaptive', allQuestions = [], cust
       priority: 2
     }));
 
-  const cardsSource = (isConfigured() && cloudFlashcardsCache && cloudFlashcardsCache.length > 0)
+  const cardsSource = (isConfigured() && Array.isArray(cloudFlashcardsCache))
     ? cloudFlashcardsCache
     : [...SEED_FLASHCARDS, ...customFlashcards];
 
