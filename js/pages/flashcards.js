@@ -1,7 +1,7 @@
 // flashcards.js — Spaced repetition, Adaptive Flashcards & Full Flashcard Management (CRUD)
 import { lsGet, lsSet, toast, esc } from '../lib/utils.js';
 import { SUBJECTS } from '../data/subjects.js';
-import { SEED_FLASHCARDS, getAdaptiveFlashcards } from '../data/flashcards.js';
+import { SEED_FLASHCARDS, getAdaptiveFlashcards, convertQuestionToFlashcard } from '../data/flashcards.js';
 import { getAllQuestions } from '../data/questions.js';
 import { sm2, isDue, sortByDue } from '../lib/sm2.js';
 
@@ -400,8 +400,26 @@ function getAllCards() {
   let states = lsGet('hp_flashcard_states', {});
   if (!states || typeof states !== 'object' || Array.isArray(states)) states = {};
 
-  const custom = lsGet('hp_flashcards', []);
-  const allQs  = getAllQuestions();
+  const custom   = lsGet('hp_flashcards', []);
+  const disabled = lsGet('hp_disabled_flashcards', []);
+  const allQs    = getAllQuestions();
+
+  if (currentTab === 'manage') {
+    const autoFc = allQs.map(q => convertQuestionToFlashcard(q));
+    const combined = [...custom, ...SEED_FLASHCARDS, ...autoFc];
+
+    const seenIds = new Set();
+    const list = combined.filter(c => {
+      if (!c || !c.id) return false;
+      const sId = String(c.id);
+      if (disabled.includes(c.id) || disabled.includes(sId)) return false;
+      if (seenIds.has(sId)) return false;
+      seenIds.add(sId);
+      return true;
+    });
+
+    return list.map(c => ({ ...c, sm2: states[c.id] || null }));
+  }
 
   const adaptiveList = getAdaptiveFlashcards(mode, allQs, custom);
 
