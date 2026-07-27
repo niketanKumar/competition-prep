@@ -2,7 +2,7 @@
 import { lsGet, lsSet, toast, esc } from '../../lib/utils.js';
 import { SUBJECTS, normalizeSubjectId } from '../../data/subjects.js';
 import { SEED_QUESTIONS, getAllQuestions } from '../../data/questions.js';
-import { generateExplanation, parseQuestionsFromText, isAiConfigured } from '../../lib/ai.js';
+import { generateExplanation, parseQuestionsFromText, normalizeQuestionObject, isAiConfigured } from '../../lib/ai.js';
 import { upsertQuestion, batchUpsertQuestions, deleteQuestion as deleteQuestionCloud, isConfigured as isSupabaseConfigured } from '../../lib/supabase.js';
 
 let filterState = { subject: 'all', verified: 'all', search: '' };
@@ -591,17 +591,9 @@ async function doImport() {
     const newItems = [];
     let added = 0;
 
-    arr.forEach(q => {
-      if (!q.q) return;
-      const imgUrl = q.image || q.imageUrl || q.image_url || q.fig || null;
-      const normalized = {
-        ...q,
-        id: q.id || (Date.now() + added),
-        subject: normalizeSubjectId(q.subject),
-        image_url: imgUrl,
-        imageUrl:  imgUrl,
-        image:     imgUrl,
-      };
+    arr.forEach((q, idx) => {
+      const normalized = normalizeQuestionObject(q, 'materia-medica', added);
+      if (!normalized) return;
       if (!custom.find(c => c.id === normalized.id)) {
         custom.push(normalized);
         newItems.push(normalized);

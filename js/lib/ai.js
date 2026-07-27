@@ -261,6 +261,78 @@ Provide a clear, educational explanation of WHY this is correct, and briefly why
   };
 }
 
+// ─── Universal Question Normalizer ──────────────────────────────────────────
+export function normalizeQuestionObject(item, defaultSubject = 'materia-medica', idx = 0) {
+  if (!item || typeof item !== 'object') return null;
+
+  const qText = item.q || item.question || item.prompt || item.questionText || '';
+  if (!qText || typeof qText !== 'string') return null;
+
+  // 1. Options normalization (Handles arrays or individual a, b, c, d properties)
+  let options = [];
+  if (Array.isArray(item.options)) {
+    options = item.options.map(String);
+  } else if (Array.isArray(item.opts)) {
+    options = item.opts.map(String);
+  } else if (Array.isArray(item.choices)) {
+    options = item.choices.map(String);
+  } else if (item.a !== undefined || item.b !== undefined || item.c !== undefined || item.d !== undefined) {
+    const rawOpts = [item.a, item.b, item.c, item.d, item.e];
+    options = rawOpts.filter(val => val !== undefined && val !== null && String(val).trim() !== '').map(String);
+  }
+
+  if (options.length === 0) {
+    options = ['Option A', 'Option B', 'Option C', 'Option D'];
+  }
+
+  // 2. Correct answer index normalization (Handles numbers, keys 'a'/'b'/'c'/'d', and ans text matching)
+  let correct = null;
+
+  if (typeof item.correct === 'number') {
+    correct = item.correct;
+  } else if (typeof item.ans === 'number') {
+    correct = item.ans;
+  } else {
+    const keyVal = String(item.keys || item.key || item.ansKey || item.correctKey || '').trim().toLowerCase();
+    if (keyVal) {
+      const charMap = { 'a': 0, '1': 0, 'b': 1, '2': 1, 'c': 2, '3': 2, 'd': 3, '4': 3, 'e': 4, '5': 4 };
+      const firstKey = keyVal.split(/[,/]/)[0].trim();
+      if (charMap[firstKey] !== undefined) {
+        correct = charMap[firstKey];
+      }
+    }
+  }
+
+  // Matching text string if correct is still null (e.g. ans: 'Headache relieved by warm application')
+  if (correct === null && typeof item.ans === 'string' && item.ans.trim()) {
+    const ansLower = item.ans.trim().toLowerCase();
+    const foundIdx = options.findIndex(opt => opt.trim().toLowerCase() === ansLower);
+    if (foundIdx !== -1) {
+      correct = foundIdx;
+    }
+  }
+
+  const imgUrl = item.image || item.imageUrl || item.image_url || item.fig || item.figure || item.img || null;
+
+  return {
+    id: item.id || item.gid || (Date.now() + idx),
+    q: qText.trim(),
+    options,
+    correct: correct !== null ? correct : 0,
+    exp: item.exp || item.explanation || item.rationale || '',
+    subject: normalizeSubjectId(item.sub || item.subject || defaultSubject),
+    exam: item.exam || 'AIAPGET',
+    year: parseInt(item.year) || null,
+    group: item.group || (item.gid ? `Group-${item.gid}` : null),
+    image_url: imgUrl,
+    imageUrl: imgUrl,
+    image: imgUrl,
+    verified: item.verified !== undefined ? !!item.verified : true,
+    ai_generated_exp: false,
+    status: item.st || item.status || 'normal',
+  };
+}
+
 // ─── Parse Questions From Document / Text ────────────────────────────────────
 export async function parseQuestionsFromText(text, subject) {
   // 1. Direct JS / JSON Array Parser (Instant, zero AI needed, no truncation)
@@ -280,22 +352,9 @@ export async function parseQuestionsFromText(text, subject) {
     }
 
     if (Array.isArray(parsed) && parsed.length > 0) {
-      return parsed.map((item, idx) => {
-        const imgUrl = item.image || item.imageUrl || item.image_url || item.fig || item.figure || item.img || null;
-        return {
-          id: item.id || idx + 1,
-          q: item.q || item.question || 'Question',
-          options: Array.isArray(item.options) ? item.options : Array.isArray(item.opts) ? item.opts : ['A', 'B', 'C', 'D'],
-          correct: typeof item.correct === 'number' ? item.correct : typeof item.ans === 'number' ? item.ans : 0,
-          exp: item.exp || item.explanation || '',
-          subject: normalizeSubjectId(item.subject || subject),
-          exam: item.exam || null,
-          year: item.year || 2025,
-          image: imgUrl,
-          imageUrl: imgUrl,
-          image_url: imgUrl,
-        };
-      });
+      return parsed
+        .map((item, idx) => normalizeQuestionObject(item, subject, idx))
+        .filter(Boolean);
     }
   }
 
