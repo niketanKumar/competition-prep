@@ -6,13 +6,16 @@ import { generateExplanation, parseQuestionsFromText, isAiConfigured } from '../
 import { upsertQuestion, batchUpsertQuestions, deleteQuestion as deleteQuestionCloud, isConfigured as isSupabaseConfigured } from '../../lib/supabase.js';
 
 let filterState = { subject: 'all', verified: 'all', search: '' };
+let currentPage = 1;
+let pageSize = 25;
+let selectedQIds = new Set();
 
 export function renderAdminQuestions() {
   document.getElementById('page-container').innerHTML = `
     <div class="page-header flex justify-between items-center" style="flex-wrap:wrap;gap:var(--sp-4)">
       <div>
         <h1 class="page-title animate-fade-up">⚙️ Question Manager</h1>
-        <p class="page-subtitle animate-fade-up delay-1">Add, edit, delete and manage the question bank</p>
+        <p class="page-subtitle animate-fade-up delay-1">Add, edit, delete, batch manage, and export the question bank</p>
       </div>
       <div class="flex gap-2 animate-fade-up delay-2">
         <button class="btn btn-secondary" id="import-json-btn">📥 Import JSON</button>
@@ -25,22 +28,37 @@ export function renderAdminQuestions() {
       ${getQStats()}
     </div>
 
-    <!-- Filter -->
+    <!-- Filter & Toolbar -->
     <div class="filter-bar animate-fade-up delay-2" style="margin-bottom:var(--sp-4)">
-      <span class="filter-label">Subject:</span>
-      <select class="form-select" style="width:auto" id="aq-subject">
-        <option value="all">All</option>
-        ${SUBJECTS.map(s => `<option value="${s.id}">${s.icon} ${s.name}</option>`).join('')}
-      </select>
-      <select class="form-select" style="width:auto" id="aq-verified">
-        <option value="all">All Status</option>
-        <option value="verified">✅ Verified</option>
-        <option value="pending">🔄 AI / Unverified</option>
-        <option value="noanswer">❓ No Answer</option>
-      </select>
-      <input class="form-input" type="search" id="aq-search" placeholder="Search questions…" style="width:240px" />
-      <button class="btn btn-primary btn-sm" id="aq-filter-btn">Filter</button>
+      <div style="display:flex;align-items:center;gap:var(--sp-3);flex-wrap:wrap">
+        <span class="filter-label">Subject:</span>
+        <select class="form-select" style="width:auto" id="aq-subject">
+          <option value="all">📚 All Subjects</option>
+          ${SUBJECTS.map(s => `<option value="${s.id}" ${filterState.subject === s.id ? 'selected' : ''}>${s.icon} ${s.name}</option>`).join('')}
+        </select>
+        <select class="form-select" style="width:auto" id="aq-verified">
+          <option value="all">All Status</option>
+          <option value="verified" ${filterState.verified === 'verified' ? 'selected' : ''}>✅ Verified</option>
+          <option value="pending" ${filterState.verified === 'pending' ? 'selected' : ''}>🔄 AI / Unverified</option>
+          <option value="noanswer" ${filterState.verified === 'noanswer' ? 'selected' : ''}>❓ No Answer</option>
+        </select>
+        <input class="form-input" type="search" id="aq-search" placeholder="Search questions…" value="${esc(filterState.search)}" style="width:200px" />
+        <button class="btn btn-primary btn-sm" id="aq-filter-btn">Filter</button>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:var(--sp-3);margin-left:auto">
+        <span class="filter-label">Per Page:</span>
+        <select class="form-select" style="width:auto;height:34px;padding:0 24px 0 8px;font-size:.82rem" id="aq-pagesize">
+          <option value="25" ${pageSize === 25 ? 'selected' : ''}>25</option>
+          <option value="50" ${pageSize === 50 ? 'selected' : ''}>50</option>
+          <option value="100" ${pageSize === 100 ? 'selected' : ''}>100</option>
+          <option value="all" ${pageSize === 'all' ? 'selected' : ''}>All</option>
+        </select>
+      </div>
     </div>
+
+    <!-- Floating Bulk Action Bar Container -->
+    <div id="bulk-action-bar-container"></div>
 
     <!-- Question List -->
     <div id="admin-q-list" class="animate-fade-up delay-3">
@@ -63,7 +81,7 @@ export function renderAdminQuestions() {
           </div>
           <div class="divider-text"><span>or paste JSON directly</span></div>
           <textarea class="form-textarea" id="json-paste" placeholder='[{"id":1,"q":"Question...","options":["A","B","C","D"],"correct":0,...}]' rows="8"></textarea>
-          <p class="form-hint" style="margin-top:var(--sp-2)">JSON must match the question schema. See docs for field reference.</p>
+          <p class="form-hint" style="margin-top:var(--sp-2)">JSON must match the question schema.</p>
         </div>
         <div class="modal-footer">
           <button class="btn btn-ghost" id="cancel-import">Cancel</button>
@@ -180,74 +198,291 @@ function getQStats() {
   </div>`).join('');
 }
 
-function renderQuestionList() {
+function getFilteredQuestions() {
   let all = getAllQuestions();
   if (filterState.subject !== 'all') all = all.filter(q => q.subject === filterState.subject);
   if (filterState.verified === 'verified') all = all.filter(q => q.verified);
   if (filterState.verified === 'pending')  all = all.filter(q => q.ai_generated_exp && !q.verified);
   if (filterState.verified === 'noanswer') all = all.filter(q => q.correct === null || q.correct === undefined);
-  if (filterState.search)                  all = all.filter(q => q.q.toLowerCase().includes(filterState.search.toLowerCase()));
+  if (filterState.search)                  all = all.filter(q => (q.q || '').toLowerCase().includes(filterState.search.toLowerCase()) || String(q.id).includes(filterState.search));
+  return all;
+}
 
-  if (!all.length) return `<div class="empty-state"><span class="empty-state-icon">🔍</span><h3>No questions match</h3></div>`;
+function renderQuestionList() {
+  const filtered = getFilteredQuestions();
+
+  if (!filtered.length) {
+    return `<div class="empty-state"><span class="empty-state-icon">🔍</span><h3>No questions match your filter</h3></div>`;
+  }
+
+  // Calculate pagination bounds
+  const total = filtered.length;
+  const size  = pageSize === 'all' ? total : parseInt(pageSize);
+  const totalPages = Math.ceil(total / size) || 1;
+
+  if (currentPage > totalPages) currentPage = totalPages;
+  if (currentPage < 1) currentPage = 1;
+
+  const startIdx = (currentPage - 1) * size;
+  const endIdx   = pageSize === 'all' ? total : Math.min(startIdx + size, total);
+  const pageItems = filtered.slice(startIdx, endIdx);
+
+  const allPageSelected = pageItems.length > 0 && pageItems.every(q => selectedQIds.has(q.id));
 
   return `
-    <div style="font-size:.82rem;color:var(--text-3);margin-bottom:var(--sp-3)">Showing ${all.length} question${all.length!==1?'s':''}</div>
+    <!-- Top Table Toolbar -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--sp-3);gap:var(--sp-3);flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:var(--sp-3)">
+        <label style="display:flex;align-items:center;gap:var(--sp-2);font-size:.85rem;font-weight:600;cursor:pointer">
+          <input type="checkbox" id="master-select-all" ${allPageSelected ? 'checked' : ''} style="width:16px;height:16px;accent-color:var(--primary)">
+          Select All on Page
+        </label>
+        <span style="font-size:.82rem;color:var(--text-3)">Showing ${startIdx + 1}–${endIdx} of ${total} questions</span>
+      </div>
+      ${selectedQIds.size > 0 ? `<span style="font-size:.85rem;font-weight:700;color:var(--primary)">${selectedQIds.size} selected</span>` : ''}
+    </div>
+
+    <!-- Questions Items -->
     <div style="display:flex;flex-direction:column;gap:var(--sp-2)">
-      ${all.slice(0, 50).map((q, i) => {
+      ${pageItems.map((q, i) => {
         const subj = SUBJECTS.find(s => s.id === q.subject);
         const isSeed = SEED_QUESTIONS.find(sq => sq.id === q.id);
+        const isSelected = selectedQIds.has(q.id);
+
         return `
-          <div style="padding:var(--sp-4) var(--sp-5);background:white;border:1px solid var(--border);border-radius:var(--r-md);display:flex;align-items:flex-start;gap:var(--sp-4)">
+          <div style="padding:var(--sp-3) var(--sp-4);background:white;border:1px solid ${isSelected ? 'var(--primary)' : 'var(--border)'};border-radius:var(--r-md);display:flex;align-items:flex-start;gap:var(--sp-3);${isSelected ? 'background:var(--primary-bg)' : ''}">
+            <input type="checkbox" class="q-item-chk" data-id="${q.id}" ${isSelected ? 'checked' : ''} style="width:18px;height:18px;margin-top:4px;accent-color:var(--primary);cursor:pointer">
             <div style="flex:1;overflow:hidden">
-              <div style="display:flex;gap:var(--sp-2);flex-wrap:wrap;margin-bottom:var(--sp-2)">
+              <div style="display:flex;gap:var(--sp-2);flex-wrap:wrap;margin-bottom:var(--sp-2);align-items:center">
+                <span style="font-weight:700;font-size:.78rem;color:var(--text-3)">#${q.id}</span>
                 ${subj ? `<span class="badge" style="background:${subj.bg};color:${subj.color}">${subj.icon} ${subj.name}</span>` : ''}
+                ${q.exam ? `<span class="badge badge-primary">🏷️ ${esc(q.exam)}</span>` : ''}
                 ${q.year ? `<span class="badge badge-neutral">${q.year}</span>` : ''}
                 ${q.verified ? '<span class="badge badge-success">✅ Verified</span>' : ''}
                 ${q.ai_generated_exp ? '<span class="badge badge-warning">🤖 AI</span>' : ''}
                 ${q.correct === null || q.correct === undefined ? '<span class="badge badge-error">❓ No Answer</span>' : ''}
                 ${isSeed ? '<span class="badge badge-neutral">Built-in</span>' : ''}
               </div>
-              <p style="font-size:.88rem;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:600px">${esc(q.q)}</p>
+              <p style="font-size:.88rem;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:700px;font-weight:500">${esc(q.q)}</p>
             </div>
             <div class="flex gap-2" style="flex-shrink:0">
               ${isAiConfigured() && (q.correct === null || !q.exp) ? `<button class="btn btn-outline btn-sm" onclick="aiGenForQ(${q.id})">🤖 AI</button>` : ''}
               ${!isSeed ? `
-                <button class="btn btn-ghost btn-sm" onclick="editQuestion(${q.id})">Edit</button>
-                <button class="btn btn-danger btn-sm" onclick="deleteQuestion(${q.id})">Delete</button>
-              ` : `<button class="btn btn-ghost btn-sm" onclick="editQuestion(${q.id})">View</button>`}
+                <button class="btn btn-ghost btn-sm" onclick="editQuestion(${q.id})">✏️ Edit</button>
+                <button class="btn btn-danger btn-sm" onclick="deleteQuestion(${q.id})">🗑️</button>
+              ` : `<button class="btn btn-ghost btn-sm" onclick="editQuestion(${q.id})">👁️</button>`}
             </div>
           </div>`;
       }).join('')}
-      ${all.length > 50 ? `<p style="text-align:center;color:var(--text-3);font-size:.85rem">Showing first 50 of ${all.length}. Use filters to narrow down.</p>` : ''}
-    </div>`;
+    </div>
+
+    <!-- Bottom Pagination Bar -->
+    ${pageSize !== 'all' && totalPages > 1 ? `
+      <div class="pagination-bar">
+        <div style="font-size:.82rem;color:var(--text-3)">
+          Page <strong>${currentPage}</strong> of <strong>${totalPages}</strong>
+        </div>
+        <div class="pagination-controls">
+          <button class="page-num-btn" id="pg-first" ${currentPage === 1 ? 'disabled style="opacity:.4"' : ''}>⏮</button>
+          <button class="page-num-btn" id="pg-prev" ${currentPage === 1 ? 'disabled style="opacity:.4"' : ''}>◀</button>
+          ${renderPageNumbers(currentPage, totalPages)}
+          <button class="page-num-btn" id="pg-next" ${currentPage === totalPages ? 'disabled style="opacity:.4"' : ''}>▶</button>
+          <button class="page-num-btn" id="pg-last" ${currentPage === totalPages ? 'disabled style="opacity:.4"' : ''}>⏭</button>
+        </div>
+      </div>
+    ` : ''}
+  `;
+}
+
+function renderPageNumbers(curr, total) {
+  const pages = [];
+  const maxShown = 5;
+  let start = Math.max(1, curr - 2);
+  let end   = Math.min(total, start + maxShown - 1);
+  if (end - start < maxShown - 1) start = Math.max(1, end - maxShown + 1);
+
+  for (let p = start; p <= end; p++) {
+    pages.push(`<button class="page-num-btn ${p === curr ? 'active' : ''}" data-page="${p}">${p}</button>`);
+  }
+  return pages.join('');
 }
 
 let editingId = null;
 
 function wireAdminQuestions() {
-  document.getElementById('aq-filter-btn').addEventListener('click', () => {
+  document.getElementById('aq-filter-btn')?.addEventListener('click', () => {
     filterState.subject  = document.getElementById('aq-subject').value;
     filterState.verified = document.getElementById('aq-verified').value;
     filterState.search   = document.getElementById('aq-search').value.trim();
-    document.getElementById('admin-q-list').innerHTML = renderQuestionList();
+    currentPage = 1;
+    updateListUI();
+  });
+
+  document.getElementById('aq-pagesize')?.addEventListener('change', (e) => {
+    pageSize = e.target.value;
+    currentPage = 1;
+    updateListUI();
   });
 
   // Import JSON
-  document.getElementById('import-json-btn').addEventListener('click', () => {
+  document.getElementById('import-json-btn')?.addEventListener('click', () => {
     document.getElementById('import-modal').classList.remove('hidden');
   });
-  document.getElementById('close-import-modal').addEventListener('click', () => document.getElementById('import-modal').classList.add('hidden'));
-  document.getElementById('cancel-import').addEventListener('click', () => document.getElementById('import-modal').classList.add('hidden'));
-  document.getElementById('json-drop-zone').addEventListener('click', () => document.getElementById('json-file-input').click());
-  document.getElementById('json-file-input').addEventListener('change', handleFileImport);
-  document.getElementById('do-import').addEventListener('click', doImport);
+  document.getElementById('close-import-modal')?.addEventListener('click', () => document.getElementById('import-modal').classList.add('hidden'));
+  document.getElementById('cancel-import')?.addEventListener('click', () => document.getElementById('import-modal').classList.add('hidden'));
+  document.getElementById('json-drop-zone')?.addEventListener('click', () => document.getElementById('json-file-input').click());
+  document.getElementById('json-file-input')?.addEventListener('change', handleFileImport);
+  document.getElementById('do-import')?.addEventListener('click', doImport);
 
   // Add Question
-  document.getElementById('add-q-btn').addEventListener('click', () => openQuestionModal(null));
-  document.getElementById('close-q-modal').addEventListener('click', closeQuestionModal);
-  document.getElementById('cancel-q').addEventListener('click', closeQuestionModal);
-  document.getElementById('save-q').addEventListener('click', saveQuestion);
+  document.getElementById('add-q-btn')?.addEventListener('click', () => openQuestionModal(null));
+  document.getElementById('close-q-modal')?.addEventListener('click', closeQuestionModal);
+  document.getElementById('cancel-q')?.addEventListener('click', closeQuestionModal);
+  document.getElementById('save-q')?.addEventListener('click', saveQuestion);
   document.getElementById('ai-fill-btn')?.addEventListener('click', aiFillExplanation);
+
+  wireListEvents();
+}
+
+function updateListUI() {
+  const listContainer = document.getElementById('admin-q-list');
+  if (listContainer) listContainer.innerHTML = renderQuestionList();
+  renderBulkActionBar();
+  wireListEvents();
+}
+
+function wireListEvents() {
+  const filtered = getFilteredQuestions();
+  const size  = pageSize === 'all' ? filtered.length : parseInt(pageSize);
+  const totalPages = Math.ceil(filtered.length / size) || 1;
+  const startIdx = (currentPage - 1) * size;
+  const pageItems = filtered.slice(startIdx, startIdx + size);
+
+  // Master checkbox
+  document.getElementById('master-select-all')?.addEventListener('change', (e) => {
+    if (e.target.checked) {
+      pageItems.forEach(q => selectedQIds.add(q.id));
+    } else {
+      pageItems.forEach(q => selectedQIds.delete(q.id));
+    }
+    updateListUI();
+  });
+
+  // Item checkboxes
+  document.querySelectorAll('.q-item-chk').forEach(chk => {
+    chk.addEventListener('change', (e) => {
+      const qId = parseInt(e.target.dataset.id) || e.target.dataset.id;
+      if (e.target.checked) selectedQIds.add(qId);
+      else selectedQIds.delete(qId);
+      renderBulkActionBar();
+    });
+  });
+
+  // Pagination buttons
+  document.getElementById('pg-first')?.addEventListener('click', () => { currentPage = 1; updateListUI(); });
+  document.getElementById('pg-prev')?.addEventListener('click', () => { if (currentPage > 1) { currentPage--; updateListUI(); } });
+  document.getElementById('pg-next')?.addEventListener('click', () => { if (currentPage < totalPages) { currentPage++; updateListUI(); } });
+  document.getElementById('pg-last')?.addEventListener('click', () => { currentPage = totalPages; updateListUI(); });
+
+  document.querySelectorAll('.page-num-btn[data-page]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentPage = parseInt(btn.dataset.page) || 1;
+      updateListUI();
+    });
+  });
+}
+
+function renderBulkActionBar() {
+  const container = document.getElementById('bulk-action-bar-container');
+  if (!container) return;
+
+  if (selectedQIds.size === 0) {
+    container.innerHTML = '';
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="bulk-actions-bar">
+      <span style="font-weight:700;font-size:.9rem">${selectedQIds.size} questions selected</span>
+      <button class="btn btn-success btn-sm" id="bulk-verify-btn">✅ Verify Selected</button>
+      <button class="btn btn-secondary btn-sm" id="bulk-export-btn">📥 Export JSON</button>
+      <button class="btn btn-danger btn-sm" id="bulk-delete-btn">🗑️ Delete Selected</button>
+      <button class="btn btn-ghost btn-sm" id="bulk-clear-btn" style="color:white;opacity:.8">✕ Clear</button>
+    </div>
+  `;
+
+  document.getElementById('bulk-verify-btn')?.addEventListener('click', handleBulkVerify);
+  document.getElementById('bulk-export-btn')?.addEventListener('click', handleBulkExport);
+  document.getElementById('bulk-delete-btn')?.addEventListener('click', handleBulkDelete);
+  document.getElementById('bulk-clear-btn')?.addEventListener('click', () => {
+    selectedQIds.clear();
+    updateListUI();
+  });
+}
+
+async function handleBulkDelete() {
+  if (selectedQIds.size === 0) return;
+  const count = selectedQIds.size;
+  if (!confirm(`Are you sure you want to delete ${count} selected question(s)?`)) return;
+
+  const custom = lsGet('hp_questions', []);
+  const idsToDelete = Array.from(selectedQIds);
+
+  const updated = custom.filter(q => !idsToDelete.includes(q.id));
+  lsSet('hp_questions', updated);
+
+  if (isSupabaseConfigured()) {
+    toast(`⏳ Deleting ${count} questions from Supabase…`, 'default', 2000);
+    for (const id of idsToDelete) {
+      await deleteQuestionCloud(id);
+    }
+  }
+
+  selectedQIds.clear();
+  toast(`🎉 Deleted ${count} question(s)!`, 'success');
+  updateListUI();
+}
+
+async function handleBulkVerify() {
+  if (selectedQIds.size === 0) return;
+  const count = selectedQIds.size;
+  const custom = lsGet('hp_questions', []);
+  const allQs = getAllQuestions();
+  const targetQs = allQs.filter(q => selectedQIds.has(q.id));
+
+  targetQs.forEach(q => { q.verified = true; });
+
+  const updatedCustom = custom.map(cq => {
+    if (selectedQIds.has(cq.id)) return { ...cq, verified: true };
+    return cq;
+  });
+  lsSet('hp_questions', updatedCustom);
+
+  if (isSupabaseConfigured()) {
+    toast(`⏳ Updating ${count} questions in Supabase…`, 'default', 2000);
+    await batchUpsertQuestions(targetQs);
+  }
+
+  toast(`✅ Marked ${count} question(s) as verified!`, 'success');
+  updateListUI();
+}
+
+function handleBulkExport() {
+  if (selectedQIds.size === 0) return;
+  const allQs = getAllQuestions();
+  const selectedQs = allQs.filter(q => selectedQIds.has(q.id));
+
+  const jsonStr = JSON.stringify(selectedQs, null, 2);
+  const blob = new Blob([jsonStr], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `homeoprep-questions-${selectedQIds.size}qs.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+
+  toast(`📥 Exported ${selectedQIds.size} questions to JSON!`, 'success');
 }
 
 function openQuestionModal(q) {

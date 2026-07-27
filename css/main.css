@@ -1188,3 +1188,37 @@ tr:hover td { background: var(--bg-2); }
     padding: var(--sp-4) !important;
   }
 }
+
+/* ------- Bulk Action Bar & Pagination ------- */
+.bulk-actions-bar {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 650;
+  background: var(--text); color: white; border-radius: var(--r-full);
+  padding: var(--sp-3) var(--sp-6); display: flex; align-items: center; gap: var(--sp-4);
+  box-shadow: 0 10px 30px rgba(44, 24, 16, 0.4);
+  animation: slide-up .25s var(--ease);
+}
+@keyframes slide-up { from { transform: translate(-50%, 100%); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
+
+.pagination-bar {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--sp-4);
+  padding: var(--sp-4) var(--sp-5); background: white; border: 1px solid var(--border);
+  border-radius: var(--r-md); margin-top: var(--sp-4);
+}
+
+.pagination-controls {
+  display: flex; align-items: center; gap: var(--sp-1);
+}
+
+.page-num-btn {
+  min-width: 32px; height: 32px; padding: 0 6px; border-radius: var(--r-sm);
+  border: 1px solid var(--border); background: var(--bg); color: var(--text);
+  font-size: .82rem; font-weight: 600; cursor: pointer; transition: all var(--t-fast);
+}
+
+.page-num-btn.active {
+  background: var(--primary); color: white; border-color: var(--primary);
+}
+
+.page-num-btn:hover:not(.active) {
+  background: var(--surface);
+}
