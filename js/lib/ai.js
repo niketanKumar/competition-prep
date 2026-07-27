@@ -355,7 +355,7 @@ export function normalizeQuestionObject(item, defaultSubject = 'materia-medica',
 }
 
 // ─── WP Pro Quiz & WordPress Quiz HTML Page Parser ─────────────────────────────
-export function parseWpProQuizHtml(htmlText, defaultSubject = 'materia-medica') {
+export function parseWpProQuizHtml(htmlText, defaultSubject = 'materia-medica', defaultExamTag = 'AIAPGET') {
   if (typeof DOMParser === 'undefined') return [];
 
   try {
@@ -468,22 +468,33 @@ export function parseWpProQuizHtml(htmlText, defaultSubject = 'materia-medica') 
 
 // ─── Parse Questions From Document / Text ────────────────────────────────────
 export async function parseQuestionsFromText(text, subject, examTag = 'AIAPGET') {
-  // 1. Embedded JS / JSON Array Parser FIRST (Target const Q = [...] or [{ "id": 1 ... }] in script tags or raw JSON)
-  const scriptArrayMatch = text.match(/(?:const|let|var)\s+\w+\s*=\s*(\[\s*\{[\s\S]*?\}\s*\]);?/i)
-                        || text.match(/\[\s*\{\s*"id"[\s\S]*?\}\s*\]/i)
-                        || text.match(/\[\s*\{[\s\S]*\}\s*\]/);
+  const isHtml = text.includes('<!doctype html>') || text.includes('<html') || text.includes('wpProQuiz');
 
-  if (scriptArrayMatch) {
-    const rawArrayStr = (scriptArrayMatch[1] || scriptArrayMatch[0]).trim();
+  // ── Format 2: HTML dump → DOM parser runs FIRST ──────────────────────────
+  if (isHtml) {
+    const htmlQuestions = parseWpProQuizHtml(text, subject, examTag);
+    if (htmlQuestions.length > 0) return htmlQuestions;
+  }
+
+  // ── Format 1: Pure JS / JSON array ─────────────────────────────────────────
+  let rawArrayStr = null;
+  const varMatch = text.match(/(?:const|let|var)\s+\w+\s*=\s*(\[[\s\S]*\])\s*;?\s*$/im);
+  if (varMatch) {
+    rawArrayStr = varMatch[1].trim();
+  } else {
+    const plainMatch = text.match(/\[\s*\{[\s\S]*\}\s*\]/);
+    if (plainMatch) rawArrayStr = plainMatch[0].trim();
+  }
+
+  if (rawArrayStr) {
     let parsed = null;
-
     try {
       parsed = JSON.parse(rawArrayStr);
     } catch {
       try {
         parsed = new Function(`return ${rawArrayStr}`)();
       } catch (e) {
-        console.warn('[Parser] JS Function evaluation failed:', e);
+        console.warn('[Parser] JS/JSON array evaluation failed:', e);
       }
     }
 
@@ -493,12 +504,6 @@ export async function parseQuestionsFromText(text, subject, examTag = 'AIAPGET')
         .filter(Boolean);
       if (validQs.length > 0) return validQs;
     }
-  }
-
-  // 2. WP Pro Quiz & HTML DOM Parser (for pages with pure HTML quiz elements and no embedded JS array)
-  if (text.includes('wpProQuiz') || text.includes('<!doctype html>') || text.includes('<html')) {
-    const htmlQuestions = parseWpProQuizHtml(text, subject, examTag);
-    if (htmlQuestions.length > 0) return htmlQuestions;
   }
 
   // 2. AI Parsing (Gemini / Groq) if text is unstructured and AI is available
