@@ -1,5 +1,27 @@
-// flashcards.js — Seed flashcard data for all major subjects
 import { lsGet, lsSet } from '../lib/utils.js';
+import { fetchFlashcardsCloud, isConfigured } from '../lib/supabase.js';
+
+let cloudFlashcardsCache = null;
+
+export function setCloudFlashcardsCache(data) {
+  cloudFlashcardsCache = data || null;
+}
+
+export async function loadCloudFlashcards() {
+  if (isConfigured()) {
+    try {
+      const { data } = await fetchFlashcardsCloud();
+      if (data && data.length) {
+        setCloudFlashcardsCache(data);
+        lsSet('hp_cloud_flashcards', cloudFlashcardsCache);
+        return cloudFlashcardsCache;
+      }
+    } catch (e) {
+      console.warn('[Flashcards] Failed to fetch cloud flashcards:', e);
+    }
+  }
+  return null;
+}
 
 export const SEED_FLASHCARDS = [
   // MATERIA MEDICA
@@ -130,8 +152,11 @@ export function getAdaptiveFlashcards(mode = 'adaptive', allQuestions = [], cust
       priority: 2
     }));
 
-  // 3. Custom & Seed Flashcards
-  const standardFlashcards = [...SEED_FLASHCARDS, ...customFlashcards].map(f => ({
+  const cardsSource = (isConfigured() && cloudFlashcardsCache && cloudFlashcardsCache.length > 0)
+    ? cloudFlashcardsCache
+    : [...SEED_FLASHCARDS, ...customFlashcards];
+
+  const standardFlashcards = cardsSource.map(f => ({
     ...f,
     badge: f.badge || '📚 Core Concept',
     priority: 3

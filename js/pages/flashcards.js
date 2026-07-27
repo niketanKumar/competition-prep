@@ -1,9 +1,10 @@
 // flashcards.js — Spaced repetition, Adaptive Flashcards & Full Flashcard Management (CRUD)
 import { lsGet, lsSet, toast, esc } from '../lib/utils.js';
 import { SUBJECTS } from '../data/subjects.js';
-import { SEED_FLASHCARDS, getAdaptiveFlashcards, convertQuestionToFlashcard } from '../data/flashcards.js';
+import { SEED_FLASHCARDS, getAdaptiveFlashcards, convertQuestionToFlashcard, loadCloudFlashcards } from '../data/flashcards.js';
 import { getAllQuestions } from '../data/questions.js';
 import { sm2, isDue, sortByDue } from '../lib/sm2.js';
+import { upsertFlashcardCloud, deleteFlashcardCloud, deleteFlashcardsCloudBulk, isConfigured as isSupabaseConfigured } from '../lib/supabase.js';
 
 let deck = [];
 let currentIdx = 0;
@@ -284,18 +285,21 @@ function wireManageEvents() {
   document.getElementById('fc-pg-next')?.addEventListener('click', () => { fcPage++; renderFlashcards(); });
 }
 
-function handleFcBulkDelete() {
+async function handleFcBulkDelete() {
   if (selectedFcIds.size === 0) return;
   const count = selectedFcIds.size;
   if (!confirm(`Delete ${count} selected flashcard(s)?`)) return;
 
   const ids = Array.from(selectedFcIds);
-  const custom = lsGet('hp_flashcards', []).filter(c => !ids.includes(c.id));
-  lsSet('hp_flashcards', custom);
 
-  const disabled = lsGet('hp_disabled_flashcards', []);
-  ids.forEach(id => { if (!disabled.includes(id)) disabled.push(id); });
-  lsSet('hp_disabled_flashcards', disabled);
+  if (isSupabaseConfigured()) {
+    toast(`⏳ Deleting ${count} flashcards from Cloud…`, 'default', 2000);
+    await deleteFlashcardsCloudBulk(ids);
+    await loadCloudFlashcards();
+  } else {
+    const custom = lsGet('hp_flashcards', []).filter(c => !ids.includes(c.id));
+    lsSet('hp_flashcards', custom);
+  }
 
   selectedFcIds.clear();
   toast(`🎉 Deleted ${count} flashcard(s)!`, 'success');
@@ -322,7 +326,7 @@ function closeFcModal() {
   editingFcId = null;
 }
 
-function saveFcModal() {
+async function saveFcModal() {
   const front = document.getElementById('fcf-front').value.trim();
   const back  = document.getElementById('fcf-back').value.trim();
   const subject = document.getElementById('fcf-subject').value;
@@ -330,7 +334,6 @@ function saveFcModal() {
 
   if (!front || !back) return toast('Please enter front and back text.', 'error');
 
-  const custom = lsGet('hp_flashcards', []);
   const newCard = {
     id: editingFcId || `fc-${Date.now()}`,
     subject,
@@ -340,11 +343,17 @@ function saveFcModal() {
     badge: '📚 Custom Card'
   };
 
-  const existingIdx = custom.findIndex(c => c.id === newCard.id);
-  if (existingIdx !== -1) custom[existingIdx] = newCard;
-  else custom.push(newCard);
+  if (isSupabaseConfigured()) {
+    await upsertFlashcardCloud(newCard);
+    await loadCloudFlashcards();
+  } else {
+    const custom = lsGet('hp_flashcards', []);
+    const existingIdx = custom.findIndex(c => c.id === newCard.id);
+    if (existingIdx !== -1) custom[existingIdx] = newCard;
+    else custom.push(newCard);
+    lsSet('hp_flashcards', custom);
+  }
 
-  lsSet('hp_flashcards', custom);
   closeFcModal();
   toast(`✅ Flashcard ${editingFcId ? 'updated' : 'created'}!`, 'success');
   renderFlashcards();
@@ -355,15 +364,16 @@ window.editFlashcard = (id) => {
   if (card) openFcModal(card);
 };
 
-window.deleteFlashcard = (id) => {
+window.deleteFlashcard = async (id) => {
   if (!confirm('Delete this flashcard?')) return;
 
-  const custom = lsGet('hp_flashcards', []).filter(c => c.id !== id);
-  lsSet('hp_flashcards', custom);
-
-  const disabled = lsGet('hp_disabled_flashcards', []);
-  if (!disabled.includes(id)) disabled.push(id);
-  lsSet('hp_disabled_flashcards', disabled);
+  if (isSupabaseConfigured()) {
+    await deleteFlashcardCloud(id);
+    await loadCloudFlashcards();
+  } else {
+    const custom = lsGet('hp_flashcards', []).filter(c => c.id !== id);
+    lsSet('hp_flashcards', custom);
+  }
 
   selectedFcIds.delete(id);
   toast('Flashcard deleted.', 'default');

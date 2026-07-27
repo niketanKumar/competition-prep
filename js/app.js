@@ -20,6 +20,7 @@ import { renderAdminNotifications } from './pages/admin/notifications.js';
 import { lsGet, lsSet, getStreak, toast } from './lib/utils.js';
 import { getSession, onAuthChange, signOut, fetchProfile, isConfigured, getAuthUser } from './lib/supabase.js';
 import { loadCloudQuestions } from './data/questions.js';
+import { loadCloudFlashcards } from './data/flashcards.js';
 
 // ─── App State ───────────────────────────────────────────────────────────────
 let currentUser   = null;
@@ -232,8 +233,9 @@ function showApp(user) {
     adminBarVisible = false;
   }
 
-  // Fetch cloud question bank asynchronously so questions are ready for Practice & Mock Tests
+  // Fetch cloud question bank & flashcards asynchronously
   loadCloudQuestions();
+  loadCloudFlashcards();
 
   // Wire navigation & AI Bot
   wireNavigation();

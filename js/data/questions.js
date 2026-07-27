@@ -4,17 +4,21 @@ import { isConfigured, fetchQuestions } from '../lib/supabase.js';
 
 let cloudQuestionsCache = null;
 
+export function setCloudQuestionsCache(data) {
+  cloudQuestionsCache = data ? data.map(q => ({
+    ...q,
+    options: typeof q.options === 'string' ? JSON.parse(q.options) : (q.options || []),
+    image: q.image_url || q.imageUrl || q.image || null,
+    imageUrl: q.image_url || q.imageUrl || q.image || null,
+  })) : null;
+}
+
 export async function loadCloudQuestions() {
   if (isConfigured()) {
     try {
       const { data } = await fetchQuestions({});
       if (data && data.length) {
-        cloudQuestionsCache = data.map(q => ({
-          ...q,
-          options: typeof q.options === 'string' ? JSON.parse(q.options) : (q.options || []),
-          image: q.image_url || q.imageUrl || q.image || null,
-          imageUrl: q.image_url || q.imageUrl || q.image || null,
-        }));
+        setCloudQuestionsCache(data);
         lsSet('hp_cloud_questions', cloudQuestionsCache);
         return cloudQuestionsCache;
       }
@@ -26,34 +30,27 @@ export async function loadCloudQuestions() {
 }
 
 export function getAllQuestions() {
-  const rawCustom = lsGet('hp_questions', []);
-  const disabled  = lsGet('hp_deleted_question_ids', []);
-  const cloud     = cloudQuestionsCache || lsGet('hp_cloud_questions', []);
+  const custom = lsGet('hp_questions', []);
+  const cloud  = cloudQuestionsCache || lsGet('hp_cloud_questions', null);
 
-  // Ensure custom questions have non-colliding IDs so seed questions (1..386) never shadow custom questions (1..1020)
-  const custom = rawCustom.map(cq => {
-    if (!cq || cq.id === undefined || cq.id === null) return cq;
-    const sId = String(cq.id);
-    if (!sId.startsWith('cq_') && !sId.startsWith('seed_')) {
-      return { ...cq, id: `cq_${sId}` };
-    }
-    return cq;
-  });
-
-  let all = [];
-  if (isConfigured() && cloud.length > 0) {
-    all = [...custom, ...cloud];
-  } else {
-    all = [...custom, ...SEED_QUESTIONS];
+  if (isConfigured() && cloud && cloud.length > 0) {
+    const seen = new Set();
+    return cloud.filter(q => {
+      if (!q || q.id === undefined || q.id === null) return false;
+      const sId = String(q.id);
+      if (seen.has(sId)) return false;
+      seen.add(sId);
+      return true;
+    });
   }
 
+  const combined = [...custom, ...SEED_QUESTIONS];
   const seen = new Set();
-  return all.filter(q => {
+  return combined.filter(q => {
     if (!q || q.id === undefined || q.id === null) return false;
-    const qIdStr = String(q.id);
-    if (disabled.includes(q.id) || disabled.includes(qIdStr) || disabled.includes(Number(q.id))) return false;
-    if (seen.has(qIdStr)) return false;
-    seen.add(qIdStr);
+    const sId = String(q.id);
+    if (seen.has(sId)) return false;
+    seen.add(sId);
     return true;
   });
 }

@@ -164,6 +164,43 @@ export async function deleteQuestion(id) {
   return await sb.from('questions').delete().eq('id', id);
 }
 
+export async function deleteQuestionsCloudBulk(idArray) {
+  const sb = getSupabase();
+  if (!sb) return { error: { message: 'Not connected' } };
+  return await sb.from('questions').delete().in('id', idArray);
+}
+
+// ─── Flashcards Cloud ────────────────────────────────────────────────────────
+export async function fetchFlashcardsCloud() {
+  const sb = getSupabase();
+  if (!sb) return { data: null, error: null };
+  return await sb.from('flashcards').select('*');
+}
+
+export async function upsertFlashcardCloud(flashcard) {
+  const sb = getSupabase();
+  if (!sb) return { error: { message: 'Not connected' } };
+  return await sb.from('flashcards').upsert(flashcard);
+}
+
+export async function batchUpsertFlashcards(cardsArray) {
+  const sb = getSupabase();
+  if (!sb) return { error: { message: 'Not connected' } };
+  return await sb.from('flashcards').upsert(cardsArray);
+}
+
+export async function deleteFlashcardCloud(id) {
+  const sb = getSupabase();
+  if (!sb) return { error: { message: 'Not connected' } };
+  return await sb.from('flashcards').delete().eq('id', id);
+}
+
+export async function deleteFlashcardsCloudBulk(idArray) {
+  const sb = getSupabase();
+  if (!sb) return { error: { message: 'Not connected' } };
+  return await sb.from('flashcards').delete().in('id', idArray);
+}
+
 // ─── Test Sessions ───────────────────────────────────────────────────────────
 export async function saveTestSession(session) {
   const sb = getSupabase();

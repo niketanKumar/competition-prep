@@ -1,9 +1,9 @@
 // admin/questions.js — Admin question management panel
 import { lsGet, lsSet, toast, esc } from '../../lib/utils.js';
 import { SUBJECTS, normalizeSubjectId } from '../../data/subjects.js';
-import { SEED_QUESTIONS, getAllQuestions } from '../../data/questions.js';
+import { SEED_QUESTIONS, getAllQuestions, loadCloudQuestions } from '../../data/questions.js';
 import { generateExplanation, parseQuestionsFromText, normalizeQuestionObject, isAiConfigured } from '../../lib/ai.js';
-import { upsertQuestion, batchUpsertQuestions, deleteQuestion as deleteQuestionCloud, isConfigured as isSupabaseConfigured } from '../../lib/supabase.js';
+import { upsertQuestion, batchUpsertQuestions, deleteQuestion as deleteQuestionCloud, deleteQuestionsCloudBulk, isConfigured as isSupabaseConfigured } from '../../lib/supabase.js';
 
 let filterState = { subject: 'all', verified: 'all', exam: 'all', search: '' };
 let currentPage = 1;
@@ -442,38 +442,16 @@ async function handleBulkDelete() {
   const count = selectedQIds.size;
   if (!confirm(`Are you sure you want to delete ${count} selected question(s)?`)) return;
 
-  const custom = lsGet('hp_questions', []);
   const idsToDelete = Array.from(selectedQIds);
 
-  const updated = custom.filter(q => {
-    const sId = String(q.id);
-    const cqId = sId.startsWith('cq_') ? sId : `cq_${sId}`;
-    const rawId = sId.replace(/^cq_/, '');
-    return !idsToDelete.includes(q.id) &&
-           !idsToDelete.includes(sId) &&
-           !idsToDelete.includes(cqId) &&
-           !idsToDelete.includes(rawId) &&
-           !idsToDelete.includes(Number(rawId));
-  });
-  lsSet('hp_questions', updated);
-
-  const disabled = lsGet('hp_deleted_question_ids', []);
-  idsToDelete.forEach(id => {
-    const sId = String(id);
-    const cqId = sId.startsWith('cq_') ? sId : `cq_${sId}`;
-    const rawId = sId.replace(/^cq_/, '');
-    [id, sId, cqId, rawId, Number(rawId)].forEach(v => {
-      if (v !== undefined && v !== null && !isNaN(v) && !disabled.includes(v)) disabled.push(v);
-      else if (typeof v === 'string' && v && !disabled.includes(v)) disabled.push(v);
-    });
-  });
-  lsSet('hp_deleted_question_ids', disabled);
-
   if (isSupabaseConfigured()) {
-    toast(`⏳ Deleting ${count} questions from Supabase…`, 'default', 2000);
-    for (const id of idsToDelete) {
-      await deleteQuestionCloud(id);
-    }
+    toast(`⏳ Deleting ${count} questions from Cloud…`, 'default', 2000);
+    await deleteQuestionsCloudBulk(idsToDelete);
+    await loadCloudQuestions();
+  } else {
+    const custom = lsGet('hp_questions', []);
+    const updated = custom.filter(q => !idsToDelete.includes(q.id));
+    lsSet('hp_questions', updated);
   }
 
   selectedQIds.clear();
@@ -657,31 +635,16 @@ async function doImport() {
 
 window.deleteQuestion  = async (id) => {
   if (!confirm('Delete this question?')) return;
-  const sId = String(id);
-  const cqId = sId.startsWith('cq_') ? sId : `cq_${sId}`;
-  const rawId = sId.replace(/^cq_/, '');
-
-  const custom = lsGet('hp_questions', []).filter(q => {
-    const qId = String(q.id);
-    return qId !== sId && qId !== cqId && qId !== rawId;
-  });
-  lsSet('hp_questions', custom);
-
-  const disabled = lsGet('hp_deleted_question_ids', []);
-  [id, sId, cqId, rawId, Number(rawId)].forEach(v => {
-    if (v !== undefined && v !== null && !isNaN(v) && !disabled.includes(v)) disabled.push(v);
-    else if (typeof v === 'string' && v && !disabled.includes(v)) disabled.push(v);
-  });
-  lsSet('hp_deleted_question_ids', disabled);
-
-  selectedQIds.delete(id);
-  selectedQIds.delete(sId);
-  selectedQIds.delete(cqId);
 
   if (isSupabaseConfigured()) {
     await deleteQuestionCloud(id);
+    await loadCloudQuestions();
+  } else {
+    const custom = lsGet('hp_questions', []).filter(q => q.id !== id);
+    lsSet('hp_questions', custom);
   }
 
+  selectedQIds.delete(id);
   toast('Question deleted.', 'default');
   updateListUI();
 };
