@@ -331,29 +331,6 @@ export function normalizeQuestionObject(item, defaultSubject = 'materia-medica',
   }
 
   const imgUrl = item.image || item.imageUrl || item.image_url || item.fig || item.figure || item.img || null;
-  const rawId = item.id || item.gid || (Date.now() + idx);
-  const sRawId = String(rawId);
-  const finalId = (!sRawId.startsWith('cq_') && !sRawId.startsWith('seed_')) ? `cq_${sRawId}` : rawId;
-
-  return {
-    id: finalId,
-    q: qText.trim(),
-    options,
-    correct: correct !== null ? correct : 0,
-    exp: item.exp || item.explanation || item.rationale || '',
-    subject: normalizeSubjectId(item.sub || item.subject || defaultSubject),
-    exam: item.exam || item.tag || defaultExamTag || 'AIAPGET',
-    year: parseInt(item.year) || null,
-    group: item.group || (item.gid ? `Group-${item.gid}` : null),
-    image_url: imgUrl,
-    imageUrl: imgUrl,
-    image: imgUrl,
-    verified: item.verified !== undefined ? !!item.verified : true,
-    ai_generated_exp: false,
-    status: item.st || item.status || 'normal',
-  };
-}
-
 // ─── WP Pro Quiz & WordPress Quiz HTML Page Parser ─────────────────────────────
 export function parseWpProQuizHtml(htmlText, defaultSubject = 'materia-medica', defaultExamTag = 'AIAPGET') {
   if (typeof DOMParser === 'undefined') return [];
@@ -361,94 +338,125 @@ export function parseWpProQuizHtml(htmlText, defaultSubject = 'materia-medica', 
   try {
     const doc = new DOMParser().parseFromString(htmlText, 'text/html');
 
-    // 1. Find all question containers
+    // 1. Find question elements (Try wrappers first, then list / text elements directly)
     let questionNodes = Array.from(doc.querySelectorAll(
-      '.wpProQuiz_listItem, .wpProQuiz_question, .tutor-quiz-single-question, .learndash-question, .quiz-question-single, .question-single-item, .question-container'
+      '.wpProQuiz_listItem, .wpProQuiz_question, ol.wpProQuiz_list > li, .wpProQuiz_list > li, .tutor-quiz-single-question, .learndash-question, .quiz-question-single, .question-single-item, .question-container'
     ));
 
     if (!questionNodes.length) {
-      questionNodes = Array.from(doc.querySelectorAll('ol.wpProQuiz_list > li, .wpProQuiz_list > li, div[id*="question"]'));
+      questionNodes = Array.from(doc.querySelectorAll('.wpProQuiz_questionList, [data-question_id]'));
+    }
+    if (!questionNodes.length) {
+      questionNodes = Array.from(doc.querySelectorAll('.wpProQuiz_question_text'));
     }
 
     if (!questionNodes.length) return [];
 
+    // 2. Extract correct-answer config from inline JS scripts
     let quizConfig = {};
-    const scripts = doc.querySelectorAll('script');
-    scripts.forEach(script => {
-      const content = script.textContent || '';
-      const jsonMatch = content.match(/json\s*:\s*(\{[\s\S]*?\})\s*,\s*minResult/i) ||
-                        content.match(/wpProQuiz_config\s*=\s*(\{[\s\S]*?\});/i) ||
-                        content.match(/bitData\s*=\s*(\{[\s\S]*?\});/i);
-      if (jsonMatch) {
-        try { quizConfig = JSON.parse(jsonMatch[1]); } catch (e) {}
-      }
-    });
+    const scriptContents = Array.from(doc.querySelectorAll('script')).map(s => s.textContent || '').join('\n');
+    
+    // Parse JSON config if present
+    const jsonMatches = scriptContents.matchAll(/"?json"?\s*:\s*(\{[\s\S]*?\})\s*,\s*"?(?:minResult|quizMode|timelimit|formPos)"/gi);
+    for (const m of jsonMatches) {
+      try {
+        const obj = JSON.parse(m[1]);
+        Object.assign(quizConfig, obj);
+      } catch (e) {}
+    }
 
     const questions = [];
 
     questionNodes.forEach((qNode, idx) => {
-      // Question Text
-      const qTextEl = qNode.querySelector(
-        '.wpProQuiz_question_text, .tutor-quiz-question-title, .learndash-question-title, .question-title, .question-text, .wpProQuiz_header, h4, h5'
-      );
+      const container = qNode.closest('.wpProQuiz_listItem, .wpProQuiz_question, ol.wpProQuiz_list > li, .tutor-quiz-single-question, .question-container') || qNode.parentElement || qNode;
+
+      // ── Question Text ────────────────────────────────────────────────────────
+      const qTextEl = container.querySelector(
+        '.wpProQuiz_question_text, .tutor-quiz-question-title, .learndash-question-title, .question-title, .question-text, .wpProQuiz_header'
+      ) || (qNode.classList?.contains('wpProQuiz_question_text') ? qNode : null) || container.querySelector('p, h3, h4, h5');
+
       if (!qTextEl) return;
 
-      let qText = qTextEl.innerText ? qTextEl.innerText.trim() : qTextEl.textContent.trim();
+      let qText = (qTextEl.textContent || '').trim();
       qText = qText.replace(/^\s*\d+[\.\)]\s*(Question)?\s*/i, '').trim();
       if (!qText) return;
 
-      // Option Items
-      const optNodes = Array.from(qNode.querySelectorAll(
-        '.wpProQuiz_questionListItem, .tutor-quiz-answer-single, .answer-option, .wpProQuiz_questionList li, ul.answers li, ul.options li'
-      ));
+      // ── Question List & Option Items ──────────────────────────────────────────
+      const qListEl = container.querySelector('.wpProQuiz_questionList, [data-question_id]') 
+                   || (qNode.classList?.contains('wpProQuiz_questionList') ? qNode : null);
+
+      const optNodes = qListEl
+        ? Array.from(qListEl.querySelectorAll('.wpProQuiz_questionListItem, li'))
+        : Array.from(container.querySelectorAll('.wpProQuiz_questionListItem, .tutor-quiz-answer-single, .answer-option, ul.answers li, ul.options li'));
+
       if (optNodes.length < 2) return;
 
       const options = [];
       let correctIdx = null;
 
       optNodes.forEach((optNode, oIdx) => {
-        const label = optNode.querySelector('label') || optNode;
-        let optText = label.innerText || label.textContent || '';
-        optText = optText.replace(/^\s*[A-D1-4][\.\)]\s*/i, '').trim();
-        options.push(optText);
+        // Clean option text
+        const labelEl = optNode.querySelector('label') || optNode;
+        const clone = labelEl.cloneNode(true);
+        clone.querySelectorAll('input, button, span.wpProQuiz_mark').forEach(el => el.remove());
+        let optText = (clone.textContent || '').trim();
+        optText = optText.replace(/^\s*[A-Ea-e1-5][\.\)]\s*/, '').trim();
+        options.push(optText || `Option ${oIdx + 1}`);
 
-        // Correct Answer Detection
-        const isCorrectClass = optNode.classList.contains('wpProQuiz_answerCorrect') ||
-                               optNode.classList.contains('wpProQuiz_correct') ||
-                               optNode.classList.contains('correct') ||
-                               optNode.classList.contains('is-correct') ||
-                               optNode.getAttribute('data-correct') === '1' ||
-                               optNode.getAttribute('data-is-correct') === 'true' ||
-                               optNode.querySelector('.wpProQuiz_answerCorrect, .wpProQuiz_correct, .correct') ||
-                               optNode.querySelector('input[checked]');
+        // Correct answer detection from CSS classes or checked attribute
+        const isCorrectClass =
+          optNode.classList.contains('wpProQuiz_answerCorrect') ||
+          optNode.classList.contains('correct') ||
+          optNode.classList.contains('is-correct') ||
+          optNode.getAttribute('data-correct') === '1' ||
+          optNode.getAttribute('data-is-correct') === 'true' ||
+          !!optNode.querySelector('.wpProQuiz_answerCorrect, .correct') ||
+          !!optNode.querySelector('input[checked]');
 
         const bgStyle = (optNode.getAttribute('style') || '').toLowerCase();
-        const isGreenBg = bgStyle.includes('background') && (bgStyle.includes('green') || bgStyle.includes('rgb(0, 128') || bgStyle.includes('rgb(46') || bgStyle.includes('rgb(122') || bgStyle.includes('#00d'));
+        const isGreenBg = bgStyle.includes('background') && (
+          bgStyle.includes('green') || bgStyle.includes('rgb(0, 128') ||
+          bgStyle.includes('rgb(46') || bgStyle.includes('#00d')
+        );
 
-        if (isCorrectClass || isGreenBg) {
+        if ((isCorrectClass || isGreenBg) && correctIdx === null) {
           correctIdx = oIdx;
         }
       });
 
-      // Fallback: Check JS config by data-question_id
-      if (correctIdx === null) {
-        const qListEl = qNode.querySelector('.wpProQuiz_questionList, [data-question_id]');
-        const qId = qListEl ? qListEl.getAttribute('data-question_id') : null;
-        if (qId && quizConfig[qId] && Array.isArray(quizConfig[qId].correct)) {
-          const cArr = quizConfig[qId].correct;
-          const foundC = cArr.findIndex(val => val === 1 || val === true);
-          if (foundC !== -1) correctIdx = foundC;
+      // ── Fallback 1: Check JS quizConfig by question ID ────────────────────────
+      const qId = qListEl ? qListEl.getAttribute('data-question_id') : null;
+      if (correctIdx === null && qId) {
+        if (quizConfig[qId]) {
+          const cfg = quizConfig[qId];
+          if (Array.isArray(cfg.correct)) {
+            const foundC = cfg.correct.findIndex(val => val === 1 || val === true || val === '1');
+            if (foundC !== -1) correctIdx = foundC;
+          } else if (typeof cfg.correct === 'number') {
+            correctIdx = cfg.correct;
+          }
+        }
+
+        // Regex fallback directly in raw script text for "65603": { ... "correct": [1,0,0,0] }
+        if (correctIdx === null && scriptContents) {
+          const reg = new RegExp('"' + qId + '"\\s*:\\s*\\{[^}]*?"correct"\\s*:\\s*\\[([^\\]]+)\\]', 'i');
+          const m = scriptContents.match(reg);
+          if (m) {
+            const vals = m[1].split(',').map(v => v.trim());
+            const foundC = vals.findIndex(v => v === '1' || v === 'true');
+            if (foundC !== -1) correctIdx = foundC;
+          }
         }
       }
 
-      // Explanation
+      // ── Explanation ───────────────────────────────────────────────────────────
       const expEl = qNode.querySelector(
-        '.wpProQuiz_response, .wpProQuiz_correct, .wpProQuiz_tipp, .wpProQuiz_incorrect, .tutor-quiz-explanation, .explanation, .question-explanation'
+        '.wpProQuiz_tipp, .tutor-quiz-explanation, .explanation, .question-explanation'
       );
       const exp = expEl ? expEl.innerHTML.trim() : '';
 
       questions.push({
-        id: Date.now() + idx,
+        id: `cq_html_${Date.now()}_${idx}`,
         q: qText,
         options: options.length >= 2 ? options : ['Option A', 'Option B', 'Option C', 'Option D'],
         correct: correctIdx !== null ? correctIdx : 0,
