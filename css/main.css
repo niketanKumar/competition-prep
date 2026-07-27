@@ -1012,6 +1012,9 @@ tr:hover td { background: var(--bg-2); }
 
 /* ------- Filter Bar ------- */
 .filter-bar {
+  position: relative;
+  z-index: 50;
+  overflow: visible;
   display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
   flex-wrap: wrap; margin-bottom: var(--sp-6);
   padding: var(--sp-3) var(--sp-5);

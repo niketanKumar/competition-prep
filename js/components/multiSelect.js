@@ -13,11 +13,11 @@ export function renderMultiSelectContainer({ id, placeholder, options = [], sele
 
   return `
     <div class="multi-select-wrapper" id="ms-wrap-${id}" style="position:relative;display:inline-block;min-width:180px;">
-      <button type="button" class="btn btn-outline form-select ms-trigger-btn" id="ms-btn-${id}" style="display:flex;align-items:center;justify-space-between;width:100%;height:38px;padding:0 12px;font-size:.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:white;">
+      <button type="button" class="btn btn-outline form-select ms-trigger-btn" id="ms-btn-${id}" style="display:flex;align-items:center;justify-content:space-between;width:100%;height:38px;padding:0 12px;font-size:.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:white;">
         <span class="ms-btn-label">${esc(labelText)}</span>
         <span style="margin-left:8px;font-size:.7rem;opacity:.6">▼</span>
       </button>
-      <div class="ms-dropdown-menu hidden card shadow-lg" id="ms-menu-${id}" style="position:absolute;top:100%;left:0;z-index:999;min-width:230px;max-height:280px;overflow-y:auto;padding:8px;margin-top:4px;background:white;border:1px solid var(--border);border-radius:var(--r-md);">
+      <div class="ms-dropdown-menu hidden card shadow-lg" id="ms-menu-${id}" style="position:absolute;top:calc(100% + 4px);left:0;z-index:99999;min-width:240px;max-height:280px;overflow-y:auto;padding:8px;background:white;border:1px solid var(--border);border-radius:var(--r-md);box-shadow:0 10px 30px rgba(0,0,0,0.18), 0 4px 10px rgba(0,0,0,0.08);">
         <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 8px;margin-bottom:6px;border-bottom:1px solid var(--border);font-size:.78rem;font-weight:700;color:var(--text-3);">
           <button type="button" class="btn btn-ghost btn-xs ms-select-all" data-id="${id}" style="padding:2px 6px;font-size:.75rem">Select All</button>
           <button type="button" class="btn btn-ghost btn-xs ms-clear-all" data-id="${id}" style="padding:2px 6px;font-size:.75rem;color:var(--danger)">Clear</button>
@@ -66,15 +66,23 @@ export function wireMultiSelect({ id, options = [], selected = [], onChange }) {
 
   btn?.addEventListener('click', (e) => {
     e.stopPropagation();
-    document.querySelectorAll('.ms-dropdown-menu').forEach(m => {
-      if (m !== menu) m.classList.add('hidden');
-    });
-    menu?.classList.toggle('hidden');
+    const isCurrentlyHidden = menu?.classList.contains('hidden');
+    document.querySelectorAll('.ms-dropdown-menu').forEach(m => m.classList.add('hidden'));
+    document.querySelectorAll('.multi-select-wrapper').forEach(w => w.style.zIndex = '1');
+
+    if (isCurrentlyHidden) {
+      menu?.classList.remove('hidden');
+      wrap.style.zIndex = '1000';
+    } else {
+      menu?.classList.add('hidden');
+      wrap.style.zIndex = '1';
+    }
   });
 
   document.addEventListener('click', (e) => {
     if (!wrap.contains(e.target)) {
       menu?.classList.add('hidden');
+      wrap.style.zIndex = '1';
     }
   });
 
