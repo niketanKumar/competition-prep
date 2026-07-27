@@ -45,13 +45,14 @@ export function renderAdminUpload() {
             <div class="form-group">
               <label class="form-label">Exam Tag *</label>
               <select class="form-select" id="pdf-exam">
-                <option value="Mock" selected>📝 Mock Test</option>
-                <option value="AIAPGET">⚕️ AIAPGET</option>
+                <option value="AIAPGET" selected>⚕️ AIAPGET</option>
                 <option value="UPSC">🏛️ UPSC (Homoeopathy MO)</option>
                 <option value="State PSC">🏛️ State PSC / Medical Officer</option>
                 <option value="NIH/PG">🎓 NIH / PG Entrance</option>
-                <option value="Other">📌 Other Competitive Exam</option>
+                <option value="Mock">📝 Mock Test</option>
+                <option value="CUSTOM">✏️ Custom Exam Tag...</option>
               </select>
+              <input class="form-input hidden" type="text" id="pdf-exam-custom" placeholder="Type custom exam tag (e.g. MPPSC 2024, APPSC 2023)..." style="margin-top:var(--sp-2)" />
             </div>
             <div class="form-group">
               <label class="form-label">Year (optional)</label>
@@ -97,6 +98,18 @@ export function renderAdminUpload() {
 }
 
 function wireAdminUpload() {
+  document.getElementById('pdf-exam')?.addEventListener('change', (e) => {
+    const customInput = document.getElementById('pdf-exam-custom');
+    if (customInput) {
+      if (e.target.value === 'CUSTOM') {
+        customInput.classList.remove('hidden');
+        customInput.focus();
+      } else {
+        customInput.classList.add('hidden');
+      }
+    }
+  });
+
   document.getElementById('extract-ai-btn')?.addEventListener('click', handleAiExtraction);
   document.getElementById('save-all-extracted')?.addEventListener('click', saveAllExtracted);
 }
@@ -104,7 +117,10 @@ function wireAdminUpload() {
 async function handleAiExtraction() {
   const text    = document.getElementById('raw-text-input').value.trim();
   const subject = document.getElementById('pdf-subject').value;
-  const exam    = document.getElementById('pdf-exam').value || 'Mock';
+  const selectedExam = document.getElementById('pdf-exam').value;
+  const customExamInput = document.getElementById('pdf-exam-custom')?.value?.trim();
+  const exam = (selectedExam === 'CUSTOM' || customExamInput) ? (customExamInput || 'Custom Exam') : selectedExam;
+
   const year    = parseInt(document.getElementById('pdf-year').value) || null;
   const group   = document.getElementById('pdf-group').value.trim() || null;
 
@@ -116,7 +132,7 @@ async function handleAiExtraction() {
   btn.disabled = true;
 
   try {
-    const questions = await parseQuestionsFromText(text, subject);
+    const questions = await parseQuestionsFromText(text, subject, exam);
     if (!questions || !questions.length) {
       toast('No questions detected in text. Ensure format is Q1... A... B... C... D... Answer: B.', 'warning', 5000);
     } else {
@@ -128,7 +144,7 @@ async function handleAiExtraction() {
           options: q.options || [],
           correct: typeof q.correct === 'number' ? q.correct : 0,
           subject: normalizeSubjectId(q.subject || subject),
-          exam: q.exam || exam || 'Mock',
+          exam: exam,
           year: q.year || year || 2025,
           group_id: group || 'Imported',
           exp: q.exp || '',
@@ -140,7 +156,7 @@ async function handleAiExtraction() {
           difficulty: 'medium',
         };
       });
-      toast(`✅ Successfully loaded ${parsedQuestions.length} structured questions!`, 'success');
+      toast(`✅ Successfully loaded ${parsedQuestions.length} questions tagged as "${exam}"!`, 'success');
       renderExtractedPreview();
     }
   } catch (e) {

@@ -283,27 +283,39 @@ export function normalizeQuestionObject(item, defaultSubject = 'materia-medica',
 
   if (options.length === 0) {
     options = ['Option A', 'Option B', 'Option C', 'Option D'];
+  const qText = item.q || item.question || item.title || item.stem || item.prompt || '';
+  if (!qText || typeof qText !== 'string' || !qText.trim()) return null;
+
+  let options = item.options || item.opts || item.choices || item.answers || [];
+  if (!Array.isArray(options) || options.length < 2) return null;
+
+  options = options.map(opt => {
+    if (typeof opt === 'string') return opt.trim();
+    if (opt && typeof opt === 'object') return (opt.text || opt.answer || opt.option || '').trim();
+    return String(opt).trim();
+  }).filter(Boolean);
+
+  if (options.length < 2) return null;
+
+  let correct = null;
+  if (typeof item.correct === 'number' && item.correct >= 0 && item.correct < options.length) {
+    correct = item.correct;
+  } else if (typeof item.answer === 'number' && item.answer >= 0 && item.answer < options.length) {
+    correct = item.answer;
+  } else if (typeof item.ans === 'number' && item.ans >= 0 && item.ans < options.length) {
+    correct = item.ans;
   }
 
-  // 2. Correct answer index normalization (Handles numbers, keys 'a'/'b'/'c'/'d', and ans text matching)
-  let correct = null;
-
-  if (typeof item.correct === 'number') {
-    correct = item.correct;
-  } else if (typeof item.ans === 'number') {
-    correct = item.ans;
-  } else {
-    const keyVal = String(item.keys || item.key || item.ansKey || item.correctKey || '').trim().toLowerCase();
-    if (keyVal) {
-      const charMap = { 'a': 0, '1': 0, 'b': 1, '2': 1, 'c': 2, '3': 2, 'd': 3, '4': 3, 'e': 4, '5': 4 };
-      const firstKey = keyVal.split(/[,/]/)[0].trim();
+  if (correct === null && item.keys && typeof item.keys === 'object') {
+    const firstKey = Object.keys(item.keys)[0];
+    if (firstKey) {
+      const charMap = { 'A':0, 'B':1, 'C':2, 'D':3, 'a':0, 'b':1, 'c':2, 'd':3, '1':0, '2':1, '3':2, '4':3 };
       if (charMap[firstKey] !== undefined) {
         correct = charMap[firstKey];
       }
     }
   }
 
-  // Matching text string if correct is still null (e.g. ans: 'Headache relieved by warm application')
   if (correct === null && typeof item.ans === 'string' && item.ans.trim()) {
     const ansLower = item.ans.trim().toLowerCase();
     const foundIdx = options.findIndex(opt => opt.trim().toLowerCase() === ansLower);
@@ -324,7 +336,7 @@ export function normalizeQuestionObject(item, defaultSubject = 'materia-medica',
     correct: correct !== null ? correct : 0,
     exp: item.exp || item.explanation || item.rationale || '',
     subject: normalizeSubjectId(item.sub || item.subject || defaultSubject),
-    exam: item.exam || 'AIAPGET',
+    exam: item.exam || item.tag || defaultExamTag || 'AIAPGET',
     year: parseInt(item.year) || null,
     group: item.group || (item.gid ? `Group-${item.gid}` : null),
     image_url: imgUrl,
@@ -436,7 +448,7 @@ export function parseWpProQuizHtml(htmlText, defaultSubject = 'materia-medica') 
         correct: correctIdx !== null ? correctIdx : 0,
         exp: exp,
         subject: normalizeSubjectId(defaultSubject),
-        exam: 'AIAPGET / PYQ Bank',
+        exam: defaultExamTag,
         verified: true,
       });
     });
@@ -449,10 +461,10 @@ export function parseWpProQuizHtml(htmlText, defaultSubject = 'materia-medica') 
 }
 
 // ─── Parse Questions From Document / Text ────────────────────────────────────
-export async function parseQuestionsFromText(text, subject) {
+export async function parseQuestionsFromText(text, subject, examTag = 'AIAPGET') {
   // 0. WP Pro Quiz HTML Parser (Instant, zero AI needed)
   if (text.includes('wpProQuiz') || text.includes('<!doctype html>') || text.includes('<html')) {
-    const htmlQuestions = parseWpProQuizHtml(text, subject);
+    const htmlQuestions = parseWpProQuizHtml(text, subject, examTag);
     if (htmlQuestions.length > 0) return htmlQuestions;
   }
 

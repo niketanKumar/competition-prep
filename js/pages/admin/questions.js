@@ -5,13 +5,17 @@ import { SEED_QUESTIONS, getAllQuestions, loadCloudQuestions } from '../../data/
 import { generateExplanation, parseQuestionsFromText, normalizeQuestionObject, isAiConfigured } from '../../lib/ai.js';
 import { upsertQuestion, batchUpsertQuestions, deleteQuestion as deleteQuestionCloud, deleteQuestionsCloudBulk, isConfigured as isSupabaseConfigured } from '../../lib/supabase.js';
 
-let filterState = { subject: 'all', verified: 'all', exam: 'all', search: '' };
+import { renderMultiSelectContainer, wireMultiSelect } from '../../components/multiSelect.js';
+
+let filterState = { subjects: [], exams: [], years: [], verified: 'all', search: '' };
 let currentPage = 1;
 let pageSize = 25;
 let selectedQIds = new Set();
 
 export function renderAdminQuestions() {
-  const allExams = Array.from(new Set(getAllQuestions().map(q => q.exam || q.tag || 'AIAPGET').filter(Boolean))).sort();
+  const allQs = getAllQuestions();
+  const allExams = Array.from(new Set(allQs.map(q => q.exam || q.tag || 'AIAPGET').filter(Boolean))).sort();
+  const allYears = Array.from(new Set(allQs.map(q => q.year).filter(Boolean))).sort((a,b) => b - a);
 
   document.getElementById('page-container').innerHTML = `
     <div class="page-header flex justify-between items-center" style="flex-wrap:wrap;gap:var(--sp-4)">
@@ -33,22 +37,32 @@ export function renderAdminQuestions() {
     <!-- Filter & Toolbar -->
     <div class="filter-bar animate-fade-up delay-2" style="margin-bottom:var(--sp-4)">
       <div style="display:flex;align-items:center;gap:var(--sp-3);flex-wrap:wrap">
-        <span class="filter-label">Subject:</span>
-        <select class="form-select" style="width:auto" id="aq-subject">
-          <option value="all">📚 All Subjects</option>
-          ${SUBJECTS.map(s => `<option value="${s.id}" ${filterState.subject === s.id ? 'selected' : ''}>${s.icon} ${s.name}</option>`).join('')}
-        </select>
-        <select class="form-select" style="width:auto" id="aq-exam">
-          <option value="all">🏷️ All Tags / Exams</option>
-          ${allExams.map(ex => `<option value="${esc(ex)}" ${filterState.exam === ex ? 'selected' : ''}>🏷️ ${esc(ex)}</option>`).join('')}
-        </select>
+        <span class="filter-label">Filters:</span>
+        ${renderMultiSelectContainer({
+          id: 'aq-subjects',
+          placeholder: '📚 Select Subjects',
+          options: SUBJECTS.map(s => ({ value: s.id, label: s.name, icon: s.icon })),
+          selected: filterState.subjects
+        })}
+        ${renderMultiSelectContainer({
+          id: 'aq-exams',
+          placeholder: '🏷️ Select Tags / Exams',
+          options: allExams.map(ex => ({ value: ex, label: ex, icon: '🏷️' })),
+          selected: filterState.exams
+        })}
+        ${renderMultiSelectContainer({
+          id: 'aq-years',
+          placeholder: '📅 Select Years',
+          options: allYears.map(y => ({ value: String(y), label: String(y), icon: '📅' })),
+          selected: filterState.years
+        })}
         <select class="form-select" style="width:auto" id="aq-verified">
           <option value="all">All Status</option>
           <option value="verified" ${filterState.verified === 'verified' ? 'selected' : ''}>✅ Verified</option>
           <option value="pending" ${filterState.verified === 'pending' ? 'selected' : ''}>🔄 AI / Unverified</option>
           <option value="noanswer" ${filterState.verified === 'noanswer' ? 'selected' : ''}>❓ No Answer</option>
         </select>
-        <input class="form-input" type="search" id="aq-search" placeholder="Search questions…" value="${esc(filterState.search)}" style="width:200px" />
+        <input class="form-input" type="search" id="aq-search" placeholder="Search questions…" value="${esc(filterState.search)}" style="width:180px" />
         <button class="btn btn-primary btn-sm" id="aq-filter-btn">Filter</button>
       </div>
 
@@ -206,8 +220,17 @@ function getQStats() {
 
 function getFilteredQuestions() {
   let all = getAllQuestions();
-  if (filterState.subject !== 'all') all = all.filter(q => q.subject === filterState.subject);
-  if (filterState.exam    !== 'all') all = all.filter(q => (q.exam || q.tag || 'AIAPGET').toLowerCase() === filterState.exam.toLowerCase());
+  if (filterState.subjects && filterState.subjects.length > 0) {
+    all = all.filter(q => filterState.subjects.includes(q.subject));
+  }
+  if (filterState.exams && filterState.exams.length > 0) {
+    const examsLower = filterState.exams.map(e => e.toLowerCase());
+    all = all.filter(q => examsLower.includes((q.exam || q.tag || 'AIAPGET').toLowerCase()));
+  }
+  if (filterState.years && filterState.years.length > 0) {
+    const yearsStr = filterState.years.map(y => String(y));
+    all = all.filter(q => q.year && yearsStr.includes(String(q.year)));
+  }
   if (filterState.verified === 'verified') all = all.filter(q => q.verified);
   if (filterState.verified === 'pending')  all = all.filter(q => q.ai_generated_exp && !q.verified);
   if (filterState.verified === 'noanswer') all = all.filter(q => q.correct === null || q.correct === undefined);
@@ -317,17 +340,58 @@ function renderPageNumbers(curr, total) {
 let editingId = null;
 
 function wireAdminQuestions() {
+  const allQs = getAllQuestions();
+  const allExams = Array.from(new Set(allQs.map(q => q.exam || q.tag || 'AIAPGET').filter(Boolean))).sort();
+  const allYears = Array.from(new Set(allQs.map(q => q.year).filter(Boolean))).sort((a,b) => b - a);
+
+  wireMultiSelect({
+    id: 'aq-subjects',
+    options: SUBJECTS.map(s => ({ value: s.id, label: s.name, icon: s.icon })),
+    selected: filterState.subjects,
+    onChange: (sel) => {
+      filterState.subjects = sel;
+      currentPage = 1;
+      updateListUI();
+    }
+  });
+
+  wireMultiSelect({
+    id: 'aq-exams',
+    options: allExams.map(ex => ({ value: ex, label: ex, icon: '🏷️' })),
+    selected: filterState.exams,
+    onChange: (sel) => {
+      filterState.exams = sel;
+      currentPage = 1;
+      updateListUI();
+    }
+  });
+
+  wireMultiSelect({
+    id: 'aq-years',
+    options: allYears.map(y => ({ value: String(y), label: String(y), icon: '📅' })),
+    selected: filterState.years,
+    onChange: (sel) => {
+      filterState.years = sel;
+      currentPage = 1;
+      updateListUI();
+    }
+  });
+
   document.getElementById('aq-filter-btn')?.addEventListener('click', () => {
-    filterState.subject  = document.getElementById('aq-subject').value;
     filterState.verified = document.getElementById('aq-verified').value;
-    filterState.exam     = document.getElementById('aq-exam')?.value || 'all';
     filterState.search   = document.getElementById('aq-search').value.trim();
     currentPage = 1;
     updateListUI();
   });
 
-  document.getElementById('aq-exam')?.addEventListener('change', (e) => {
-    filterState.exam = e.target.value;
+  document.getElementById('aq-verified')?.addEventListener('change', (e) => {
+    filterState.verified = e.target.value;
+    currentPage = 1;
+    updateListUI();
+  });
+
+  document.getElementById('aq-search')?.addEventListener('input', (e) => {
+    filterState.search = e.target.value.trim();
     currentPage = 1;
     updateListUI();
   });
