@@ -474,10 +474,13 @@ export async function parseQuestionsFromText(text, subject, examTag = 'AIAPGET')
     if (htmlQuestions.length > 0) return htmlQuestions;
   }
 
-  // 1. Direct JS / JSON Array Parser (Instant, zero AI needed, no truncation)
-  const arrayMatch = text.match(/\[\s*\{[\s\S]*\}\s*\]/);
-  if (arrayMatch) {
-    const rawArrayStr = arrayMatch[0].trim();
+  // 1. Embedded JS Array Parser (Target const Q = [...] or [{ "id": 1 ... }] in script tags / HTML)
+  const scriptArrayMatch = text.match(/(?:const|let|var)\s+\w+\s*=\s*(\[\s*\{[\s\S]*?\}\s*\]);?/i)
+                        || text.match(/\[\s*\{\s*"id"[\s\S]*?\}\s*\]/i)
+                        || text.match(/\[\s*\{[\s\S]*\}\s*\]/);
+
+  if (scriptArrayMatch) {
+    const rawArrayStr = (scriptArrayMatch[1] || scriptArrayMatch[0]).trim();
     let parsed = null;
 
     try {
@@ -491,9 +494,10 @@ export async function parseQuestionsFromText(text, subject, examTag = 'AIAPGET')
     }
 
     if (Array.isArray(parsed) && parsed.length > 0) {
-      return parsed
-        .map((item, idx) => normalizeQuestionObject(item, subject, idx))
+      const validQs = parsed
+        .map((item, idx) => normalizeQuestionObject(item, subject, idx, examTag))
         .filter(Boolean);
+      if (validQs.length > 0) return validQs;
     }
   }
 
