@@ -1,6 +1,7 @@
 // planner.js — Per-Subject Time & Topic Allocation AIAPGET Study Planner
 import { lsGet, lsSet, daysUntil, generateStudyPlan, formatDate, toast, esc } from '../lib/utils.js';
 import { SUBJECTS } from '../data/subjects.js';
+import { isConfigured as isSupabaseConfigured } from '../lib/supabase.js';
 
 let editingDate = null;
 let currentEditingAllocations = [];
@@ -10,6 +11,7 @@ export function renderPlanner() {
   const days     = daysUntil(examDate);
   let plan       = lsGet('hp_study_plan', []);
   const today    = new Date().toISOString().split('T')[0];
+  const targetHours = lsGet('hp_target_daily_hours', 6);
 
   // Ensure all plan entries have per-subject allocations
   if (Array.isArray(plan)) {
@@ -18,7 +20,7 @@ export function renderPlanner() {
       if (Array.isArray(p.subjectAllocations) && p.subjectAllocations.length > 0) {
         allocations = p.subjectAllocations;
       } else if (Array.isArray(p.subjects) && p.subjects.length > 0) {
-        const hPerSub = (parseFloat(p.allocatedHours) || 3.0) / p.subjects.length;
+        const hPerSub = (parseFloat(p.allocatedHours) || targetHours) / p.subjects.length;
         allocations = p.subjects.map(sId => ({
           subject: sId,
           time: Math.round(hPerSub * 2) / 2 || 1.0,
@@ -27,7 +29,7 @@ export function renderPlanner() {
       } else {
         allocations = [{
           subject: p.subject || 'materia-medica',
-          time: parseFloat(p.allocatedHours) || 3.0,
+          time: parseFloat(p.allocatedHours) || targetHours,
           notes: p.taskNotes || '',
         }];
       }
@@ -42,6 +44,7 @@ export function renderPlanner() {
         allocatedHours: Math.round(totalH * 2) / 2,
         status: p.status || (p.done ? 'completed' : 'pending'),
         done: p.status === 'completed' || p.done === true,
+        checklist: p.checklist || { notes: false, mcqs: false, flashcards: false, mock: false }
       };
     });
   } else {
@@ -55,6 +58,8 @@ export function renderPlanner() {
   const totalHours     = plan.reduce((acc, p) => acc + (parseFloat(p.allocatedHours) || 0), 0);
   const completedHours = plan.reduce((acc, p) => acc + (p.status === 'completed' || p.done ? (parseFloat(p.allocatedHours) || 0) : 0), 0);
   const completionPct  = totalDays > 0 ? Math.round((completedDays / totalDays) * 100) : 0;
+
+  const todayPlan = plan.find(p => p.date === today);
 
   const container = document.getElementById('page-container');
   if (!container) return;
@@ -78,6 +83,21 @@ export function renderPlanner() {
         <p style="margin-bottom:var(--sp-5);color:var(--text-3)">We'll generate a personalized, subject-weighted study plan based on your remaining days.</p>
         <button class="btn btn-primary btn-lg" onclick="window.navigate('settings')">Set Exam Date →</button>
       </div>` : `
+
+      <!-- Daily Target Hours Selector -->
+      <div class="card animate-fade-up delay-1" style="margin-bottom:var(--sp-6);background:var(--surface)">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--sp-4)">
+          <div>
+            <h4 style="margin-bottom:2px">⏱️ Target Daily Study Pace</h4>
+            <p style="font-size:.82rem;color:var(--text-3)">Select your daily available study time to automatically balance high-weightage NCH subjects</p>
+          </div>
+          <div class="flex gap-2">
+            <button class="btn ${targetHours === 4 ? 'btn-primary' : 'btn-outline'} btn-sm target-hrs-btn" data-hrs="4">⚡ 4 Hours / Day</button>
+            <button class="btn ${targetHours === 6 ? 'btn-primary' : 'btn-outline'} btn-sm target-hrs-btn" data-hrs="6">🔥 6 Hours / Day</button>
+            <button class="btn ${targetHours === 8 ? 'btn-primary' : 'btn-outline'} btn-sm target-hrs-btn" data-hrs="8">🚀 8 Hours / Day</button>
+          </div>
+        </div>
+      </div>
 
       <!-- Productivity & Progress Banner Grid -->
       <div class="grid-4 animate-fade-up delay-1" style="margin-bottom:var(--sp-6)">
@@ -108,11 +128,62 @@ export function renderPlanner() {
 
         <!-- In Progress & Active -->
         <div class="card" style="text-align:center">
-          <div style="font-size:1.8rem;font-weight:700;color:var(--warning)">${inProgressDays}</div>
+          <div style="font-size:1.8rem;font-weight:700;color:var(--amber)">${inProgressDays}</div>
           <div style="font-size:.8rem;color:var(--text-3);margin-top:2px">Tasks In Progress</div>
-          <div style="font-size:.72rem;color:var(--text-3);margin-top:var(--sp-2)">${plan.filter(p => p.date === today).length > 0 ? '📍 Today active' : 'No task scheduled today'}</div>
+          <div style="font-size:.72rem;color:var(--text-3);margin-top:var(--sp-2)">${todayPlan ? '📍 Today Active' : 'No task scheduled today'}</div>
         </div>
       </div>
+
+      <!-- Today's Focus & Micro-Task Checklist -->
+      ${todayPlan ? `
+        <div class="card animate-fade-up delay-2" style="margin-bottom:var(--sp-6);border-left:4px solid var(--primary)">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--sp-3);margin-bottom:var(--sp-4)">
+            <div>
+              <span class="badge badge-warning" style="margin-bottom:4px">🌟 Today's Focus Routine (${formatDate(today)})</span>
+              <h3 style="margin-top:2px">Daily Study Checklist</h3>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="window.navigate('practice')">📝 Start Practice Session →</button>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:var(--sp-3)">
+            <!-- Checklist Item 1 -->
+            <label style="display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3);background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);cursor:pointer">
+              <input type="checkbox" class="today-task-chk" data-task="notes" ${todayPlan.checklist?.notes ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--primary)">
+              <div>
+                <div style="font-weight:600;font-size:.85rem">📖 Subject Notes / Aphorisms</div>
+                <div style="font-size:.75rem;color:var(--text-3)">Review core concepts & keynotes</div>
+              </div>
+            </label>
+
+            <!-- Checklist Item 2 -->
+            <label style="display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3);background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);cursor:pointer">
+              <input type="checkbox" class="today-task-chk" data-task="mcqs" ${todayPlan.checklist?.mcqs ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--primary)">
+              <div>
+                <div style="font-weight:600;font-size:.85rem">📝 Solve ${todayPlan.questionsTarget || 30} MCQs</div>
+                <div style="font-size:.75rem;color:var(--text-3)">Practice mode questions</div>
+              </div>
+            </label>
+
+            <!-- Checklist Item 3 -->
+            <label style="display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3);background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);cursor:pointer">
+              <input type="checkbox" class="today-task-chk" data-task="flashcards" ${todayPlan.checklist?.flashcards ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--primary)">
+              <div>
+                <div style="font-weight:600;font-size:.85rem">🃏 Review Flashcards</div>
+                <div style="font-size:.75rem;color:var(--text-3)">Spaced repetition cards</div>
+              </div>
+            </label>
+
+            <!-- Checklist Item 4 -->
+            <label style="display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3);background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);cursor:pointer">
+              <input type="checkbox" class="today-task-chk" data-task="mock" ${todayPlan.checklist?.mock ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--primary)">
+              <div>
+                <div style="font-weight:600;font-size:.85rem">⏱️ Mock Test / PYQs</div>
+                <div style="font-size:.75rem;color:var(--text-3)">Timed evaluation</div>
+              </div>
+            </label>
+          </div>
+        </div>
+      ` : ''}
 
       <!-- Weekly Schedule Strip -->
       ${plan.length > 0 ? `
@@ -313,10 +384,48 @@ export function renderPlanner() {
     </div>
   `;
 
-  wirePlannerEvents();
+  wirePlanner();
 }
 
-function wirePlannerEvents() {
+function wirePlanner() {
+  // Target Daily Hours buttons
+  document.querySelectorAll('.target-hrs-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const hrs = parseInt(btn.dataset.hrs) || 6;
+      lsSet('hp_target_daily_hours', hrs);
+      toast(`⏱️ Target study pace set to ${hrs} Hours/Day!`, 'success');
+      renderPlanner();
+    });
+  });
+
+  // Today Task Checklist checkboxes
+  document.querySelectorAll('.today-task-chk').forEach(chk => {
+    chk.addEventListener('change', (e) => {
+      const task = e.target.dataset.task;
+      const checked = e.target.checked;
+      const today = new Date().toISOString().split('T')[0];
+      let plan = lsGet('hp_study_plan', []);
+      let todayEntry = plan.find(p => p.date === today);
+
+      if (todayEntry) {
+        if (!todayEntry.checklist) todayEntry.checklist = {};
+        todayEntry.checklist[task] = checked;
+
+        const checkedCount = Object.values(todayEntry.checklist).filter(Boolean).length;
+        if (checkedCount >= 3) {
+          todayEntry.status = 'completed';
+          todayEntry.done = true;
+        } else if (checkedCount > 0) {
+          todayEntry.status = 'in-progress';
+          todayEntry.done = false;
+        }
+
+        lsSet('hp_study_plan', plan);
+        toast(`Task updated ${checked ? '✅' : '⏳'}`, 'success', 1500);
+      }
+    });
+  });
+
   document.getElementById('gen-plan-btn')?.addEventListener('click', generateOrRegenPlan);
   document.getElementById('empty-gen-plan-btn')?.addEventListener('click', generateOrRegenPlan);
   document.getElementById('add-custom-task-btn')?.addEventListener('click', () => openAddModal());
