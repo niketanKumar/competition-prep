@@ -333,8 +333,95 @@ export function normalizeQuestionObject(item, defaultSubject = 'materia-medica',
   };
 }
 
+// ─── WP Pro Quiz HTML Page Parser ───────────────────────────────────────────
+export function parseWpProQuizHtml(htmlText, defaultSubject = 'materia-medica') {
+  if (typeof DOMParser === 'undefined') return [];
+
+  try {
+    const doc = new DOMParser().parseFromString(htmlText, 'text/html');
+    const questionNodes = doc.querySelectorAll('.wpProQuiz_listItem, .wpProQuiz_question');
+    if (!questionNodes.length) return [];
+
+    let quizConfig = {};
+    const scripts = doc.querySelectorAll('script');
+    scripts.forEach(script => {
+      const content = script.textContent || '';
+      const jsonMatch = content.match(/json\s*:\s*(\{[\s\S]*?\})\s*,\s*minResult/i) ||
+                        content.match(/wpProQuiz_config\s*=\s*(\{[\s\S]*?\});/i) ||
+                        content.match(/bitData\s*=\s*(\{[\s\S]*?\});/i);
+      if (jsonMatch) {
+        try { quizConfig = JSON.parse(jsonMatch[1]); } catch (e) {}
+      }
+    });
+
+    const questions = [];
+
+    questionNodes.forEach((qNode, idx) => {
+      const qTextEl = qNode.querySelector('.wpProQuiz_question_text');
+      if (!qTextEl) return;
+      const qText = qTextEl.innerText ? qTextEl.innerText.trim() : qTextEl.textContent.trim();
+      if (!qText) return;
+
+      const optNodes = qNode.querySelectorAll('.wpProQuiz_questionListItem');
+      if (!optNodes.length) return;
+
+      const options = [];
+      let correctIdx = null;
+
+      optNodes.forEach((optNode, oIdx) => {
+        const label = optNode.querySelector('label') || optNode;
+        let optText = label.innerText || label.textContent || '';
+        optText = optText.replace(/^\s*[A-D1-4][\.\)]\s*/i, '').trim();
+        options.push(optText);
+
+        const isCorrect = optNode.classList.contains('wpProQuiz_answerCorrect') ||
+                          optNode.classList.contains('wpProQuiz_correct') ||
+                          optNode.classList.contains('correct') ||
+                          optNode.getAttribute('data-correct') === '1' ||
+                          optNode.querySelector('.wpProQuiz_answerCorrect, .wpProQuiz_correct');
+        if (isCorrect) correctIdx = oIdx;
+      });
+
+      if (correctIdx === null) {
+        const qListEl = qNode.querySelector('.wpProQuiz_questionList');
+        const qId = qListEl ? qListEl.getAttribute('data-question_id') : null;
+        if (qId && quizConfig[qId] && Array.isArray(quizConfig[qId].correct)) {
+          const cArr = quizConfig[qId].correct;
+          const foundC = cArr.findIndex(val => val === 1 || val === true);
+          if (foundC !== -1) correctIdx = foundC;
+        }
+      }
+
+      const expEl = qNode.querySelector('.wpProQuiz_response, .wpProQuiz_correct, .wpProQuiz_tipp, .wpProQuiz_incorrect');
+      const exp = expEl ? expEl.innerHTML.trim() : '';
+
+      questions.push({
+        id: Date.now() + idx,
+        q: qText,
+        options: options.length >= 2 ? options : ['Option A', 'Option B', 'Option C', 'Option D'],
+        correct: correctIdx !== null ? correctIdx : 0,
+        exp: exp,
+        subject: normalizeSubjectId(defaultSubject),
+        exam: 'State PSC / Lecturer',
+        verified: true,
+      });
+    });
+
+    return questions;
+  } catch (e) {
+    console.warn('[HTML Parser] Failed to parse HTML:', e);
+    return [];
+  }
+}
+
 // ─── Parse Questions From Document / Text ────────────────────────────────────
 export async function parseQuestionsFromText(text, subject) {
+  // 0. WP Pro Quiz HTML Parser (Instant, zero AI needed)
+  if (text.includes('wpProQuiz') || text.includes('<!doctype html>') || text.includes('<html')) {
+    const htmlQuestions = parseWpProQuizHtml(text, subject);
+    if (htmlQuestions.length > 0) return htmlQuestions;
+  }
+
   // 1. Direct JS / JSON Array Parser (Instant, zero AI needed, no truncation)
   const arrayMatch = text.match(/\[\s*\{[\s\S]*\}\s*\]/);
   if (arrayMatch) {
