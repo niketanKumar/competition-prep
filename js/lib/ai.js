@@ -331,6 +331,29 @@ export function normalizeQuestionObject(item, defaultSubject = 'materia-medica',
   }
 
   const imgUrl = item.image || item.imageUrl || item.image_url || item.fig || item.figure || item.img || null;
+  const rawId = item.id || item.gid || (Date.now() + idx);
+  const sRawId = String(rawId);
+  const finalId = (!sRawId.startsWith('cq_') && !sRawId.startsWith('seed_')) ? `cq_${sRawId}` : rawId;
+
+  return {
+    id: finalId,
+    q: qText.trim(),
+    options,
+    correct: correct !== null ? correct : 0,
+    exp: item.exp || item.explanation || item.rationale || '',
+    subject: normalizeSubjectId(item.sub || item.subject || defaultSubject),
+    exam: item.exam || item.tag || defaultExamTag || 'AIAPGET',
+    year: parseInt(item.year) || null,
+    group: item.group || (item.gid ? `Group-${item.gid}` : null),
+    image_url: imgUrl,
+    imageUrl: imgUrl,
+    image: imgUrl,
+    verified: item.verified !== undefined ? !!item.verified : true,
+    ai_generated_exp: false,
+    status: item.st || item.status || 'normal',
+  };
+}
+
 // ─── WP Pro Quiz & WordPress Quiz HTML Page Parser ─────────────────────────────
 export function parseWpProQuizHtml(htmlText, defaultSubject = 'materia-medica', defaultExamTag = 'AIAPGET') {
   if (typeof DOMParser === 'undefined') return [];
