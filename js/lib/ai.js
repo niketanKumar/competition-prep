@@ -470,13 +470,14 @@ export function parseWpProQuizHtml(htmlText, defaultSubject = 'materia-medica', 
 export async function parseQuestionsFromText(text, subject, examTag = 'AIAPGET') {
   const isHtml = text.includes('<!doctype html>') || text.includes('<html') || text.includes('wpProQuiz');
 
-  // ── Format 2: HTML dump → DOM parser runs FIRST ──────────────────────────
+  // ── Format 2: HTML dump → DOM parser ONLY (never fall through to regex on HTML)
+  // Running a greedy [\s\S]* regex on an 18k-line HTML file freezes the browser.
   if (isHtml) {
-    const htmlQuestions = parseWpProQuizHtml(text, subject, examTag);
-    if (htmlQuestions.length > 0) return htmlQuestions;
+    return parseWpProQuizHtml(text, subject, examTag);
   }
 
-  // ── Format 1: Pure JS / JSON array ─────────────────────────────────────────
+  // ── Format 1: Pure JS / JSON array (e.g. let a = [{...}] with backtick strings) ──
+  // Only reaches here for non-HTML input.
   let rawArrayStr = null;
   const varMatch = text.match(/(?:const|let|var)\s+\w+\s*=\s*(\[[\s\S]*\])\s*;?\s*$/im);
   if (varMatch) {
