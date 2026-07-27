@@ -1,4 +1,6 @@
 // flashcards.js — Seed flashcard data for all major subjects
+import { lsGet, lsSet } from '../lib/utils.js';
+
 export const SEED_FLASHCARDS = [
   // MATERIA MEDICA
   { id: 'f1', subject: 'materia-medica', difficulty: 'medium',

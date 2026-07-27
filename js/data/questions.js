@@ -26,17 +26,25 @@ export async function loadCloudQuestions() {
 }
 
 export function getAllQuestions() {
-  const custom = lsGet('hp_questions', []);
-  const cloud  = cloudQuestionsCache || lsGet('hp_cloud_questions', []);
+  const custom   = lsGet('hp_questions', []);
+  const disabled = lsGet('hp_deleted_question_ids', []);
+  const cloud    = cloudQuestionsCache || lsGet('hp_cloud_questions', []);
 
-  if (isConfigured()) {
-    if (cloud.length > 0) {
-      return [...cloud, ...custom];
-    }
-    // Fallback if cloud hasn't returned yet or is empty
-    return [...SEED_QUESTIONS, ...custom];
+  let all = [];
+  if (isConfigured() && cloud.length > 0) {
+    all = [...cloud, ...custom];
+  } else {
+    all = [...SEED_QUESTIONS, ...custom];
   }
-  return [...SEED_QUESTIONS, ...custom];
+
+  const seen = new Set();
+  return all.filter(q => {
+    if (!q || q.id === undefined || q.id === null) return false;
+    if (disabled.includes(q.id) || disabled.includes(String(q.id)) || disabled.includes(Number(q.id))) return false;
+    if (seen.has(q.id)) return false;
+    seen.add(q.id);
+    return true;
+  });
 }
 
 export const SEED_QUESTIONS = [

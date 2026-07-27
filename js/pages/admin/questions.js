@@ -448,6 +448,12 @@ async function handleBulkDelete() {
   const updated = custom.filter(q => !idsToDelete.includes(q.id));
   lsSet('hp_questions', updated);
 
+  const disabled = lsGet('hp_deleted_question_ids', []);
+  idsToDelete.forEach(id => {
+    if (!disabled.includes(id)) disabled.push(id);
+  });
+  lsSet('hp_deleted_question_ids', disabled);
+
   if (isSupabaseConfigured()) {
     toast(`⏳ Deleting ${count} questions from Supabase…`, 'default', 2000);
     for (const id of idsToDelete) {
@@ -639,6 +645,11 @@ window.deleteQuestion  = async (id) => {
   if (!confirm('Delete this question?')) return;
   const custom = lsGet('hp_questions', []).filter(q => q.id !== id);
   lsSet('hp_questions', custom);
+
+  const disabled = lsGet('hp_deleted_question_ids', []);
+  if (!disabled.includes(id)) disabled.push(id);
+  lsSet('hp_deleted_question_ids', disabled);
+
   selectedQIds.delete(id);
 
   if (isSupabaseConfigured()) {
