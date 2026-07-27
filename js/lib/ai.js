@@ -262,13 +262,13 @@ Provide a clear, educational explanation of WHY this is correct, and briefly why
 }
 
 // ─── Universal Question Normalizer ──────────────────────────────────────────
-export function normalizeQuestionObject(item, defaultSubject = 'materia-medica', idx = 0) {
+export function normalizeQuestionObject(item, defaultSubject = 'materia-medica', idx = 0, defaultExamTag = 'AIAPGET') {
   if (!item || typeof item !== 'object') return null;
 
-  const qText = item.q || item.question || item.prompt || item.questionText || '';
-  if (!qText || typeof qText !== 'string') return null;
+  const qText = item.q || item.question || item.title || item.stem || item.prompt || item.questionText || '';
+  if (!qText || typeof qText !== 'string' || !qText.trim()) return null;
 
-  // 1. Options normalization (Handles arrays or individual a, b, c, d properties)
+  // 1. Options normalization
   let options = [];
   if (Array.isArray(item.options)) {
     options = item.options.map(String);
@@ -276,18 +276,12 @@ export function normalizeQuestionObject(item, defaultSubject = 'materia-medica',
     options = item.opts.map(String);
   } else if (Array.isArray(item.choices)) {
     options = item.choices.map(String);
+  } else if (Array.isArray(item.answers)) {
+    options = item.answers.map(String);
   } else if (item.a !== undefined || item.b !== undefined || item.c !== undefined || item.d !== undefined) {
     const rawOpts = [item.a, item.b, item.c, item.d, item.e];
     options = rawOpts.filter(val => val !== undefined && val !== null && String(val).trim() !== '').map(String);
   }
-
-  if (options.length === 0) {
-    options = ['Option A', 'Option B', 'Option C', 'Option D'];
-  const qText = item.q || item.question || item.title || item.stem || item.prompt || '';
-  if (!qText || typeof qText !== 'string' || !qText.trim()) return null;
-
-  let options = item.options || item.opts || item.choices || item.answers || [];
-  if (!Array.isArray(options) || options.length < 2) return null;
 
   options = options.map(opt => {
     if (typeof opt === 'string') return opt.trim();
@@ -295,8 +289,11 @@ export function normalizeQuestionObject(item, defaultSubject = 'materia-medica',
     return String(opt).trim();
   }).filter(Boolean);
 
-  if (options.length < 2) return null;
+  if (options.length < 2) {
+    options = ['Option A', 'Option B', 'Option C', 'Option D'];
+  }
 
+  // 2. Correct answer index normalization
   let correct = null;
   if (typeof item.correct === 'number' && item.correct >= 0 && item.correct < options.length) {
     correct = item.correct;
@@ -304,6 +301,15 @@ export function normalizeQuestionObject(item, defaultSubject = 'materia-medica',
     correct = item.answer;
   } else if (typeof item.ans === 'number' && item.ans >= 0 && item.ans < options.length) {
     correct = item.ans;
+  } else {
+    const keyVal = String(item.keys || item.key || item.ansKey || item.correctKey || '').trim().toLowerCase();
+    if (keyVal) {
+      const charMap = { 'a': 0, '1': 0, 'b': 1, '2': 1, 'c': 2, '3': 2, 'd': 3, '4': 3, 'e': 4, '5': 4 };
+      const firstKey = keyVal.split(/[,/]/)[0].trim();
+      if (charMap[firstKey] !== undefined) {
+        correct = charMap[firstKey];
+      }
+    }
   }
 
   if (correct === null && item.keys && typeof item.keys === 'object') {
