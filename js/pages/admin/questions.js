@@ -188,10 +188,10 @@ export function renderAdminQuestions() {
 }
 
 function getQStats() {
-  const all  = getAllQuestions();
-  const custom = lsGet('hp_questions', []);
-  const noAns = all.filter(q => q.correct === undefined || q.correct === null).length;
-  const aiQ   = all.filter(q => q.ai_generated_exp).length;
+  const all    = getAllQuestions();
+  const custom = all.filter(q => String(q.id).startsWith('cq_') || q.isCustom);
+  const noAns  = all.filter(q => q.correct === undefined || q.correct === null).length;
+  const aiQ    = all.filter(q => q.ai_generated_exp).length;
   return [
     { n: all.length,    l: 'Total Questions', icon: '📝' },
     { n: custom.length, l: 'Custom Added',    icon: '✏️' },
@@ -445,12 +445,27 @@ async function handleBulkDelete() {
   const custom = lsGet('hp_questions', []);
   const idsToDelete = Array.from(selectedQIds);
 
-  const updated = custom.filter(q => !idsToDelete.includes(q.id));
+  const updated = custom.filter(q => {
+    const sId = String(q.id);
+    const cqId = sId.startsWith('cq_') ? sId : `cq_${sId}`;
+    const rawId = sId.replace(/^cq_/, '');
+    return !idsToDelete.includes(q.id) &&
+           !idsToDelete.includes(sId) &&
+           !idsToDelete.includes(cqId) &&
+           !idsToDelete.includes(rawId) &&
+           !idsToDelete.includes(Number(rawId));
+  });
   lsSet('hp_questions', updated);
 
   const disabled = lsGet('hp_deleted_question_ids', []);
   idsToDelete.forEach(id => {
-    if (!disabled.includes(id)) disabled.push(id);
+    const sId = String(id);
+    const cqId = sId.startsWith('cq_') ? sId : `cq_${sId}`;
+    const rawId = sId.replace(/^cq_/, '');
+    [id, sId, cqId, rawId, Number(rawId)].forEach(v => {
+      if (v !== undefined && v !== null && !isNaN(v) && !disabled.includes(v)) disabled.push(v);
+      else if (typeof v === 'string' && v && !disabled.includes(v)) disabled.push(v);
+    });
   });
   lsSet('hp_deleted_question_ids', disabled);
 
@@ -640,17 +655,28 @@ async function doImport() {
   }
 }
 
-window.editQuestion    = (id) => { const all = getAllQuestions(); const q = all.find(q => q.id === id); if (q) openQuestionModal(q); };
 window.deleteQuestion  = async (id) => {
   if (!confirm('Delete this question?')) return;
-  const custom = lsGet('hp_questions', []).filter(q => q.id !== id);
+  const sId = String(id);
+  const cqId = sId.startsWith('cq_') ? sId : `cq_${sId}`;
+  const rawId = sId.replace(/^cq_/, '');
+
+  const custom = lsGet('hp_questions', []).filter(q => {
+    const qId = String(q.id);
+    return qId !== sId && qId !== cqId && qId !== rawId;
+  });
   lsSet('hp_questions', custom);
 
   const disabled = lsGet('hp_deleted_question_ids', []);
-  if (!disabled.includes(id)) disabled.push(id);
+  [id, sId, cqId, rawId, Number(rawId)].forEach(v => {
+    if (v !== undefined && v !== null && !isNaN(v) && !disabled.includes(v)) disabled.push(v);
+    else if (typeof v === 'string' && v && !disabled.includes(v)) disabled.push(v);
+  });
   lsSet('hp_deleted_question_ids', disabled);
 
   selectedQIds.delete(id);
+  selectedQIds.delete(sId);
+  selectedQIds.delete(cqId);
 
   if (isSupabaseConfigured()) {
     await deleteQuestionCloud(id);
