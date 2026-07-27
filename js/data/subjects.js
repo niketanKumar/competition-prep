@@ -231,6 +231,22 @@ export const SUBJECTS = [
       'Common poisons, antidote management & toxicology',
       'Alcohol & medico-legal aspects'
     ]
+  },
+  {
+    id: 'general-homoeopathy',
+    name: 'General Homoeopathy',
+    questions: 0,
+    marks: 0,
+    priority: 'General',
+    priorityBadge: '🌐 General Homoeopathy',
+    color: '#3B82F6',
+    bg: '#EFF6FF',
+    icon: '🩺',
+    keyTopics: [
+      'General questions & unclassified Homoeopathy topics',
+      'Imported paper collections & mixed previous year questions',
+      'Interdisciplinary homoeopathic principles & clinical concepts'
+    ]
   }
 ];
 
@@ -254,7 +270,7 @@ export function subjectBg(subjectId) {
   return SUBJECT_MAP[subjectId]?.bg || '#F5EFE7';
 }
 
-export function normalizeSubjectId(rawSubjectStr, fallbackId = 'materia-medica') {
+export function normalizeSubjectId(rawSubjectStr, fallbackId = 'general-homoeopathy') {
   if (!rawSubjectStr) return fallbackId;
   const str = String(rawSubjectStr).trim().toLowerCase();
 
@@ -267,6 +283,7 @@ export function normalizeSubjectId(rawSubjectStr, fallbackId = 'materia-medica')
   if (nameMatch) return nameMatch.id;
 
   // Alias / Fuzzy Map
+  if (str.includes('general') || str.includes('homoeopathy') || str.includes('homeopathy')) return 'general-homoeopathy';
   if (str.includes('gynaecol') || str.includes('gynec') || str.includes('obstetric') || str.includes('gynae') || str.includes('obs')) return 'obs-gynae';
   if (str.includes('community') || str.includes('psm')) return 'community';
   if (str.includes('practice') || str.includes('medicine')) return 'practice';

@@ -262,7 +262,7 @@ Provide a clear, educational explanation of WHY this is correct, and briefly why
 }
 
 // ─── Universal Question Normalizer ──────────────────────────────────────────
-export function normalizeQuestionObject(item, defaultSubject = 'materia-medica', idx = 0, defaultExamTag = 'AIAPGET') {
+export function normalizeQuestionObject(item, defaultSubject = 'general-homoeopathy', idx = 0, defaultExamTag = 'AIAPGET') {
   if (!item || typeof item !== 'object') return null;
 
   const qText = item.q || item.question || item.title || item.stem || item.prompt || item.questionText || '';
@@ -355,7 +355,7 @@ export function normalizeQuestionObject(item, defaultSubject = 'materia-medica',
 }
 
 // ─── WP Pro Quiz & WordPress Quiz HTML Page Parser ─────────────────────────────
-export function parseWpProQuizHtml(htmlText, defaultSubject = 'materia-medica', defaultExamTag = 'AIAPGET') {
+export function parseWpProQuizHtml(htmlText, defaultSubject = 'general-homoeopathy', defaultExamTag = 'AIAPGET') {
   if (typeof DOMParser === 'undefined') return [];
 
   try {

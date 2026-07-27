@@ -672,7 +672,7 @@ async function doImport() {
     let added = 0;
 
     arr.forEach((q, idx) => {
-      const normalized = normalizeQuestionObject(q, 'materia-medica', added);
+      const normalized = normalizeQuestionObject(q, 'general-homoeopathy', added);
       if (!normalized) return;
       if (!custom.find(c => c.id === normalized.id)) {
         custom.push(normalized);
