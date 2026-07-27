@@ -63,6 +63,9 @@ export function renderFlashcards() {
   `;
 
   wireControls();
+  wireCardEvents();
+}
+
 function wireControls() {
   const modes = ['adaptive', 'weak', 'unread', 'due', 'all'];
   modes.forEach(m => {
