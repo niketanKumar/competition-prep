@@ -333,13 +333,22 @@ export function normalizeQuestionObject(item, defaultSubject = 'materia-medica',
   };
 }
 
-// ─── WP Pro Quiz HTML Page Parser ───────────────────────────────────────────
+// ─── WP Pro Quiz & WordPress Quiz HTML Page Parser ─────────────────────────────
 export function parseWpProQuizHtml(htmlText, defaultSubject = 'materia-medica') {
   if (typeof DOMParser === 'undefined') return [];
 
   try {
     const doc = new DOMParser().parseFromString(htmlText, 'text/html');
-    const questionNodes = doc.querySelectorAll('.wpProQuiz_listItem, .wpProQuiz_question');
+
+    // 1. Find all question containers
+    let questionNodes = Array.from(doc.querySelectorAll(
+      '.wpProQuiz_listItem, .wpProQuiz_question, .tutor-quiz-single-question, .learndash-question, .quiz-question-single, .question-single-item, .question-container'
+    ));
+
+    if (!questionNodes.length) {
+      questionNodes = Array.from(doc.querySelectorAll('ol.wpProQuiz_list > li, .wpProQuiz_list > li, div[id*="question"]'));
+    }
+
     if (!questionNodes.length) return [];
 
     let quizConfig = {};
@@ -357,13 +366,21 @@ export function parseWpProQuizHtml(htmlText, defaultSubject = 'materia-medica') 
     const questions = [];
 
     questionNodes.forEach((qNode, idx) => {
-      const qTextEl = qNode.querySelector('.wpProQuiz_question_text');
+      // Question Text
+      const qTextEl = qNode.querySelector(
+        '.wpProQuiz_question_text, .tutor-quiz-question-title, .learndash-question-title, .question-title, .question-text, .wpProQuiz_header, h4, h5'
+      );
       if (!qTextEl) return;
-      const qText = qTextEl.innerText ? qTextEl.innerText.trim() : qTextEl.textContent.trim();
+
+      let qText = qTextEl.innerText ? qTextEl.innerText.trim() : qTextEl.textContent.trim();
+      qText = qText.replace(/^\s*\d+[\.\)]\s*(Question)?\s*/i, '').trim();
       if (!qText) return;
 
-      const optNodes = qNode.querySelectorAll('.wpProQuiz_questionListItem');
-      if (!optNodes.length) return;
+      // Option Items
+      const optNodes = Array.from(qNode.querySelectorAll(
+        '.wpProQuiz_questionListItem, .tutor-quiz-answer-single, .answer-option, .wpProQuiz_questionList li, ul.answers li, ul.options li'
+      ));
+      if (optNodes.length < 2) return;
 
       const options = [];
       let correctIdx = null;
@@ -374,16 +391,27 @@ export function parseWpProQuizHtml(htmlText, defaultSubject = 'materia-medica') 
         optText = optText.replace(/^\s*[A-D1-4][\.\)]\s*/i, '').trim();
         options.push(optText);
 
-        const isCorrect = optNode.classList.contains('wpProQuiz_answerCorrect') ||
-                          optNode.classList.contains('wpProQuiz_correct') ||
-                          optNode.classList.contains('correct') ||
-                          optNode.getAttribute('data-correct') === '1' ||
-                          optNode.querySelector('.wpProQuiz_answerCorrect, .wpProQuiz_correct');
-        if (isCorrect) correctIdx = oIdx;
+        // Correct Answer Detection
+        const isCorrectClass = optNode.classList.contains('wpProQuiz_answerCorrect') ||
+                               optNode.classList.contains('wpProQuiz_correct') ||
+                               optNode.classList.contains('correct') ||
+                               optNode.classList.contains('is-correct') ||
+                               optNode.getAttribute('data-correct') === '1' ||
+                               optNode.getAttribute('data-is-correct') === 'true' ||
+                               optNode.querySelector('.wpProQuiz_answerCorrect, .wpProQuiz_correct, .correct') ||
+                               optNode.querySelector('input[checked]');
+
+        const bgStyle = (optNode.getAttribute('style') || '').toLowerCase();
+        const isGreenBg = bgStyle.includes('background') && (bgStyle.includes('green') || bgStyle.includes('rgb(0, 128') || bgStyle.includes('rgb(46') || bgStyle.includes('rgb(122') || bgStyle.includes('#00d'));
+
+        if (isCorrectClass || isGreenBg) {
+          correctIdx = oIdx;
+        }
       });
 
+      // Fallback: Check JS config by data-question_id
       if (correctIdx === null) {
-        const qListEl = qNode.querySelector('.wpProQuiz_questionList');
+        const qListEl = qNode.querySelector('.wpProQuiz_questionList, [data-question_id]');
         const qId = qListEl ? qListEl.getAttribute('data-question_id') : null;
         if (qId && quizConfig[qId] && Array.isArray(quizConfig[qId].correct)) {
           const cArr = quizConfig[qId].correct;
@@ -392,7 +420,10 @@ export function parseWpProQuizHtml(htmlText, defaultSubject = 'materia-medica') 
         }
       }
 
-      const expEl = qNode.querySelector('.wpProQuiz_response, .wpProQuiz_correct, .wpProQuiz_tipp, .wpProQuiz_incorrect');
+      // Explanation
+      const expEl = qNode.querySelector(
+        '.wpProQuiz_response, .wpProQuiz_correct, .wpProQuiz_tipp, .wpProQuiz_incorrect, .tutor-quiz-explanation, .explanation, .question-explanation'
+      );
       const exp = expEl ? expEl.innerHTML.trim() : '';
 
       questions.push({
@@ -402,7 +433,7 @@ export function parseWpProQuizHtml(htmlText, defaultSubject = 'materia-medica') 
         correct: correctIdx !== null ? correctIdx : 0,
         exp: exp,
         subject: normalizeSubjectId(defaultSubject),
-        exam: 'State PSC / Lecturer',
+        exam: 'AIAPGET / PYQ Bank',
         verified: true,
       });
     });
