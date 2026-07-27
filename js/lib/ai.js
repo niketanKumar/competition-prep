@@ -468,13 +468,7 @@ export function parseWpProQuizHtml(htmlText, defaultSubject = 'materia-medica') 
 
 // ─── Parse Questions From Document / Text ────────────────────────────────────
 export async function parseQuestionsFromText(text, subject, examTag = 'AIAPGET') {
-  // 0. WP Pro Quiz HTML Parser (Instant, zero AI needed)
-  if (text.includes('wpProQuiz') || text.includes('<!doctype html>') || text.includes('<html')) {
-    const htmlQuestions = parseWpProQuizHtml(text, subject, examTag);
-    if (htmlQuestions.length > 0) return htmlQuestions;
-  }
-
-  // 1. Embedded JS Array Parser (Target const Q = [...] or [{ "id": 1 ... }] in script tags / HTML)
+  // 1. Embedded JS / JSON Array Parser FIRST (Target const Q = [...] or [{ "id": 1 ... }] in script tags or raw JSON)
   const scriptArrayMatch = text.match(/(?:const|let|var)\s+\w+\s*=\s*(\[\s*\{[\s\S]*?\}\s*\]);?/i)
                         || text.match(/\[\s*\{\s*"id"[\s\S]*?\}\s*\]/i)
                         || text.match(/\[\s*\{[\s\S]*\}\s*\]/);
@@ -499,6 +493,12 @@ export async function parseQuestionsFromText(text, subject, examTag = 'AIAPGET')
         .filter(Boolean);
       if (validQs.length > 0) return validQs;
     }
+  }
+
+  // 2. WP Pro Quiz & HTML DOM Parser (for pages with pure HTML quiz elements and no embedded JS array)
+  if (text.includes('wpProQuiz') || text.includes('<!doctype html>') || text.includes('<html')) {
+    const htmlQuestions = parseWpProQuizHtml(text, subject, examTag);
+    if (htmlQuestions.length > 0) return htmlQuestions;
   }
 
   // 2. AI Parsing (Gemini / Groq) if text is unstructured and AI is available
