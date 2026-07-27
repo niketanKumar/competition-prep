@@ -14,20 +14,23 @@ let showExp       = {};     // qId → true when user clicked "📖 Explanation"
 let aiRequested   = {};     // qId → true when AI fetch is done
 let navPage       = 0;      // current page in the question navigator (0-indexed)
 let sessionStats  = { correct: 0, wrong: 0, skipped: 0, score: 0 };
-let activeFilters = { subject: 'all', difficulty: 'all', year: 'all', bookmarked: false };
+let activeFilters = { subject: 'all', exam: 'all', difficulty: 'all', year: 'all', bookmarked: false };
 
 export function renderPractice(params = '') {
   const p = Object.fromEntries(new URLSearchParams(params));
   activeFilters.subject    = p.subject || activeFilters.subject || 'all';
+  activeFilters.exam       = p.exam || activeFilters.exam || 'all';
   activeFilters.year       = p.year || activeFilters.year || 'all';
   activeFilters.difficulty = p.diff || activeFilters.difficulty || 'all';
   if (p.bookmarked) activeFilters.bookmarked = p.bookmarked === 'true';
+
+  const allExams = Array.from(new Set(getAllQuestions().map(q => q.exam || q.tag || 'AIAPGET').filter(Boolean))).sort();
 
   const container = document.getElementById('page-container');
   container.innerHTML = `
     <div class="page-header">
       <h1 class="page-title animate-fade-up">📝 Practice Mode</h1>
-      <p class="page-subtitle animate-fade-up delay-1">Filter by subject, year, or difficulty and practice at your own pace</p>
+      <p class="page-subtitle animate-fade-up delay-1">Filter by subject, exam tag, year, or difficulty and practice at your own pace</p>
     </div>
 
     <div class="filter-bar animate-fade-up delay-1" id="practice-filters">
@@ -35,6 +38,10 @@ export function renderPractice(params = '') {
         <select class="form-select" style="width:auto;min-width:180px" id="filter-subject">
           <option value="all">📚 All Subjects</option>
           ${SUBJECTS.map(s => `<option value="${s.id}" ${activeFilters.subject===s.id?'selected':''}>${s.icon} ${s.name} (${s.questions}/exam)</option>`).join('')}
+        </select>
+        <select class="form-select" style="width:auto" id="filter-exam">
+          <option value="all">🏷️ All Tags / Exams</option>
+          ${allExams.map(ex => `<option value="${esc(ex)}" ${activeFilters.exam === ex ? 'selected' : ''}>🏷️ ${esc(ex)}</option>`).join('')}
         </select>
         <select class="form-select" style="width:auto" id="filter-year">
           <option value="all">📅 All Years</option>
@@ -74,6 +81,7 @@ export function renderPractice(params = '') {
 
   document.getElementById('apply-filters').addEventListener('click', applyFilters);
   document.getElementById('filter-subject').addEventListener('change', e => { activeFilters.subject = e.target.value; });
+  document.getElementById('filter-exam').addEventListener('change', e => { activeFilters.exam = e.target.value; });
   document.getElementById('filter-year').addEventListener('change', e => { activeFilters.year = e.target.value; });
   document.getElementById('filter-diff').addEventListener('change', e => { activeFilters.difficulty = e.target.value; });
   document.getElementById('filter-bookmarked').addEventListener('change', e => { activeFilters.bookmarked = e.target.checked; });
@@ -91,8 +99,9 @@ export function renderPractice(params = '') {
 function applyFilters() {
   let all = getAllQuestions();
   const bookmarks = lsGet('hp_bookmarks', []);
-  if (activeFilters.subject !== 'all') all = all.filter(q => q.subject === activeFilters.subject);
-  if (activeFilters.year    !== 'all') all = all.filter(q => q.year == activeFilters.year);
+  if (activeFilters.subject    !== 'all') all = all.filter(q => q.subject === activeFilters.subject);
+  if (activeFilters.exam       !== 'all') all = all.filter(q => (q.exam || q.tag || 'AIAPGET').toLowerCase() === activeFilters.exam.toLowerCase());
+  if (activeFilters.year       !== 'all') all = all.filter(q => q.year == activeFilters.year);
   if (activeFilters.difficulty !== 'all') all = all.filter(q => q.difficulty === activeFilters.difficulty);
   if (activeFilters.bookmarked) all = all.filter(q => bookmarks.includes(q.id));
 

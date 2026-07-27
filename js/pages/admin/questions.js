@@ -5,12 +5,14 @@ import { SEED_QUESTIONS, getAllQuestions } from '../../data/questions.js';
 import { generateExplanation, parseQuestionsFromText, normalizeQuestionObject, isAiConfigured } from '../../lib/ai.js';
 import { upsertQuestion, batchUpsertQuestions, deleteQuestion as deleteQuestionCloud, isConfigured as isSupabaseConfigured } from '../../lib/supabase.js';
 
-let filterState = { subject: 'all', verified: 'all', search: '' };
+let filterState = { subject: 'all', verified: 'all', exam: 'all', search: '' };
 let currentPage = 1;
 let pageSize = 25;
 let selectedQIds = new Set();
 
 export function renderAdminQuestions() {
+  const allExams = Array.from(new Set(getAllQuestions().map(q => q.exam || q.tag || 'AIAPGET').filter(Boolean))).sort();
+
   document.getElementById('page-container').innerHTML = `
     <div class="page-header flex justify-between items-center" style="flex-wrap:wrap;gap:var(--sp-4)">
       <div>
@@ -35,6 +37,10 @@ export function renderAdminQuestions() {
         <select class="form-select" style="width:auto" id="aq-subject">
           <option value="all">📚 All Subjects</option>
           ${SUBJECTS.map(s => `<option value="${s.id}" ${filterState.subject === s.id ? 'selected' : ''}>${s.icon} ${s.name}</option>`).join('')}
+        </select>
+        <select class="form-select" style="width:auto" id="aq-exam">
+          <option value="all">🏷️ All Tags / Exams</option>
+          ${allExams.map(ex => `<option value="${esc(ex)}" ${filterState.exam === ex ? 'selected' : ''}>🏷️ ${esc(ex)}</option>`).join('')}
         </select>
         <select class="form-select" style="width:auto" id="aq-verified">
           <option value="all">All Status</option>
@@ -201,6 +207,7 @@ function getQStats() {
 function getFilteredQuestions() {
   let all = getAllQuestions();
   if (filterState.subject !== 'all') all = all.filter(q => q.subject === filterState.subject);
+  if (filterState.exam    !== 'all') all = all.filter(q => (q.exam || q.tag || 'AIAPGET').toLowerCase() === filterState.exam.toLowerCase());
   if (filterState.verified === 'verified') all = all.filter(q => q.verified);
   if (filterState.verified === 'pending')  all = all.filter(q => q.ai_generated_exp && !q.verified);
   if (filterState.verified === 'noanswer') all = all.filter(q => q.correct === null || q.correct === undefined);
@@ -313,7 +320,14 @@ function wireAdminQuestions() {
   document.getElementById('aq-filter-btn')?.addEventListener('click', () => {
     filterState.subject  = document.getElementById('aq-subject').value;
     filterState.verified = document.getElementById('aq-verified').value;
+    filterState.exam     = document.getElementById('aq-exam')?.value || 'all';
     filterState.search   = document.getElementById('aq-search').value.trim();
+    currentPage = 1;
+    updateListUI();
+  });
+
+  document.getElementById('aq-exam')?.addEventListener('change', (e) => {
+    filterState.exam = e.target.value;
     currentPage = 1;
     updateListUI();
   });
