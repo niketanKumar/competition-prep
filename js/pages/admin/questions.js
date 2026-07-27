@@ -26,7 +26,7 @@ export function renderAdminQuestions() {
     </div>
 
     <!-- Stats -->
-    <div class="grid-4 animate-fade-up delay-1" style="margin-bottom:var(--sp-6)">
+    <div class="grid-4 animate-fade-up delay-1" id="q-stats-container" style="margin-bottom:var(--sp-6)">
       ${getQStats()}
     </div>
 
@@ -359,6 +359,9 @@ function wireAdminQuestions() {
 }
 
 function updateListUI() {
+  const statsEl = document.getElementById('q-stats-container');
+  if (statsEl) statsEl.innerHTML = getQStats();
+
   const listContainer = document.getElementById('admin-q-list');
   if (listContainer) listContainer.innerHTML = renderQuestionList();
   renderBulkActionBar();
@@ -565,7 +568,7 @@ async function saveQuestion() {
 
   closeQuestionModal();
   toast(`✅ Question ${editingId ? 'updated' : 'added'}!`, 'success');
-  document.getElementById('admin-q-list').innerHTML = renderQuestionList();
+  updateListUI();
 }
 
 async function aiFillExplanation() {
@@ -625,7 +628,7 @@ async function doImport() {
 
     document.getElementById('import-modal').classList.add('hidden');
     toast(`✅ Imported ${added} question${added!==1?'s':''}!`, 'success');
-    document.getElementById('admin-q-list').innerHTML = renderQuestionList();
+    updateListUI();
   } catch (e) {
     toast('Invalid JSON: ' + e.message, 'error', 5000);
   }
@@ -636,13 +639,14 @@ window.deleteQuestion  = async (id) => {
   if (!confirm('Delete this question?')) return;
   const custom = lsGet('hp_questions', []).filter(q => q.id !== id);
   lsSet('hp_questions', custom);
+  selectedQIds.delete(id);
 
   if (isSupabaseConfigured()) {
     await deleteQuestionCloud(id);
   }
 
   toast('Question deleted.', 'default');
-  document.getElementById('admin-q-list').innerHTML = renderQuestionList();
+  updateListUI();
 };
 window.aiGenForQ = async (id) => {
   const all = getAllQuestions();
@@ -657,6 +661,6 @@ window.aiGenForQ = async (id) => {
     else custom.push({ ...q, exp: explanation, ai_generated_exp: true });
     lsSet('hp_questions', custom);
     toast('✅ Explanation added! Please verify it.', 'success');
-    document.getElementById('admin-q-list').innerHTML = renderQuestionList();
+    updateListUI();
   } catch (e) { toast(e.message, 'error', 5000); }
 };

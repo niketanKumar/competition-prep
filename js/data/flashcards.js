@@ -92,7 +92,8 @@ export function convertQuestionToFlashcard(q) {
 
 // ─── Adaptive Flashcard Queue Algorithm ────────────────────────────────────────
 export function getAdaptiveFlashcards(mode = 'adaptive', allQuestions = [], customFlashcards = []) {
-  const history = JSON.parse(localStorage.getItem('hp_test_history') || '[]');
+  const disabled = lsGet('hp_disabled_flashcards', []);
+  const history  = JSON.parse(localStorage.getItem('hp_test_history') || '[]');
 
   // Collect set of question IDs attempted and question IDs answered WRONG
   const attemptedQIds = new Set();
@@ -135,27 +136,33 @@ export function getAdaptiveFlashcards(mode = 'adaptive', allQuestions = [], cust
   }));
 
   // Mode Filter Switch
+  let rawList = [];
   if (mode === 'weak') {
-    return weakFlashcards.length ? weakFlashcards : standardFlashcards;
-  }
-  if (mode === 'unread') {
-    return unreadFlashcards.length ? unreadFlashcards : standardFlashcards;
-  }
-  if (mode === 'all') {
-    return [...standardFlashcards, ...weakFlashcards, ...unreadFlashcards];
+    rawList = weakFlashcards.length ? weakFlashcards : standardFlashcards;
+  } else if (mode === 'unread') {
+    rawList = unreadFlashcards.length ? unreadFlashcards : standardFlashcards;
+  } else if (mode === 'all') {
+    rawList = [...standardFlashcards, ...weakFlashcards, ...unreadFlashcards];
+  } else {
+    // Default 'adaptive' mode: Priority blend (Weak 15, Unread 15, Standard)
+    if (weakFlashcards.length > 0) rawList.push(...weakFlashcards.slice(0, 15));
+    if (unreadFlashcards.length > 0) rawList.push(...unreadFlashcards.slice(0, 15));
+    rawList.push(...standardFlashcards);
   }
 
-  // Default 'adaptive' mode: Priority blend (Weak 50%, Unread 30%, Standard 20%)
-  const blend = [];
-  if (weakFlashcards.length > 0) blend.push(...weakFlashcards.slice(0, 15));
-  if (unreadFlashcards.length > 0) blend.push(...unreadFlashcards.slice(0, 15));
-  blend.push(...standardFlashcards);
+  // De-duplicate by ID, normalized front text, and filter disabled cards
+  const seenIds   = new Set();
+  const seenFront = new Set();
 
-  // De-duplicate by ID
-  const seen = new Set();
-  return blend.filter(f => {
-    if (seen.has(f.id)) return false;
-    seen.add(f.id);
+  return rawList.filter(f => {
+    if (disabled.includes(f.id)) return false;
+    if (seenIds.has(f.id)) return false;
+    seenIds.add(f.id);
+
+    const normFront = (f.front || '').toLowerCase().replace(/<[^>]*>?/gm, '').replace(/\s+/g, ' ').trim();
+    if (normFront && seenFront.has(normFront)) return false;
+    if (normFront) seenFront.add(normFront);
+
     return true;
   });
 }
