@@ -115,12 +115,35 @@ export async function updateProfile(userId, updates) {
 export async function fetchQuestions(filters = {}) {
   const sb = getSupabase();
   if (!sb) return { data: null, error: { message: 'Not connected' } };
-  let query = sb.from('questions').select('*');
-  if (filters.subject && filters.subject !== 'all') query = query.eq('subject', filters.subject);
-  if (filters.year && filters.year !== 'all')       query = query.eq('year', filters.year);
-  if (filters.group)                                query = query.eq('group_id', filters.group);
-  if (filters.verified !== undefined)              query = query.eq('verified', filters.verified);
-  return await query.order('id', { ascending: true });
+
+  let allData = [];
+  let from = 0;
+  const step = 1000;
+  let hasMore = true;
+
+  while (hasMore) {
+    let query = sb.from('questions').select('*').range(from, from + step - 1);
+    if (filters.subject && filters.subject !== 'all') query = query.eq('subject', filters.subject);
+    if (filters.year && filters.year !== 'all')       query = query.eq('year', filters.year);
+    if (filters.group)                                query = query.eq('group_id', filters.group);
+    if (filters.verified !== undefined)              query = query.eq('verified', filters.verified);
+
+    const { data, error } = await query.order('id', { ascending: true });
+    if (error) return { data: allData.length ? allData : null, error };
+
+    if (data && data.length) {
+      allData = allData.concat(data);
+      if (data.length < step) {
+        hasMore = false;
+      } else {
+        from += step;
+      }
+    } else {
+      hasMore = false;
+    }
+  }
+
+  return { data: allData, error: null };
 }
 
 function sanitizeQuestion(q) {
@@ -151,11 +174,17 @@ export async function upsertQuestion(question) {
   return await sb.from('questions').upsert(sanitizeQuestion(question));
 }
 
-export async function batchUpsertQuestions(questionsArray) {
+export async function batchUpsertQuestions(questionsArray, chunkSize = 200) {
   const sb = getSupabase();
   if (!sb) return { error: { message: 'Not connected' } };
   const cleanArray = (questionsArray || []).map(sanitizeQuestion);
-  return await sb.from('questions').upsert(cleanArray);
+
+  for (let i = 0; i < cleanArray.length; i += chunkSize) {
+    const chunk = cleanArray.slice(i, i + chunkSize);
+    const { error } = await sb.from('questions').upsert(chunk);
+    if (error) return { error };
+  }
+  return { error: null };
 }
 
 export async function deleteQuestion(id) {
@@ -174,7 +203,26 @@ export async function deleteQuestionsCloudBulk(idArray) {
 export async function fetchFlashcardsCloud() {
   const sb = getSupabase();
   if (!sb) return { data: null, error: null };
-  return await sb.from('flashcards').select('*');
+
+  let allData = [];
+  let from = 0;
+  const step = 1000;
+  let hasMore = true;
+
+  while (hasMore) {
+    const { data, error } = await sb.from('flashcards').select('*').range(from, from + step - 1);
+    if (error) return { data: allData.length ? allData : null, error };
+
+    if (data && data.length) {
+      allData = allData.concat(data);
+      if (data.length < step) hasMore = false;
+      else from += step;
+    } else {
+      hasMore = false;
+    }
+  }
+
+  return { data: allData, error: null };
 }
 
 export async function upsertFlashcardCloud(flashcard) {
@@ -183,10 +231,16 @@ export async function upsertFlashcardCloud(flashcard) {
   return await sb.from('flashcards').upsert(flashcard);
 }
 
-export async function batchUpsertFlashcards(cardsArray) {
+export async function batchUpsertFlashcards(cardsArray, chunkSize = 200) {
   const sb = getSupabase();
   if (!sb) return { error: { message: 'Not connected' } };
-  return await sb.from('flashcards').upsert(cardsArray);
+
+  for (let i = 0; i < cardsArray.length; i += chunkSize) {
+    const chunk = cardsArray.slice(i, i + chunkSize);
+    const { error } = await sb.from('flashcards').upsert(chunk);
+    if (error) return { error };
+  }
+  return { error: null };
 }
 
 export async function deleteFlashcardCloud(id) {

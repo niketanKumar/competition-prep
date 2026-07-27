@@ -4,6 +4,7 @@ import { SUBJECTS, SUBJECT_MAP, normalizeSubjectId } from '../../data/subjects.j
 import { parseQuestionsFromText, isAiConfigured } from '../../lib/ai.js';
 import { batchUpsertQuestions, isConfigured as isSupabaseConfigured } from '../../lib/supabase.js';
 import { convertQuestionToFlashcard } from '../../data/flashcards.js';
+import { loadCloudQuestions } from '../../data/questions.js';
 
 let parsedQuestions = [];
 
@@ -206,15 +207,19 @@ async function saveAllExtracted() {
   } catch (e) {}
 
   if (isSupabaseConfigured()) {
-    toast(`⏳ Syncing ${parsedQuestions.length} questions to Supabase Cloud…`, 'default', 2000);
+    toast(`⏳ Uploading ${parsedQuestions.length} questions to Cloud…`, 'default', 3000);
     const { error } = await batchUpsertQuestions(parsedQuestions);
+    await loadCloudQuestions();
     if (error) {
-      toast(`⚠️ Saved locally, but Supabase sync failed: ${error.message}`, 'warning', 5000);
+      toast(`⚠️ Cloud upload failed: ${error.message}`, 'error', 5000);
     } else {
-      toast(`🎉 Saved & synced ${parsedQuestions.length} new questions & flashcards!`, 'success', 5000);
+      toast(`🎉 Uploaded & synced ${parsedQuestions.length} new questions to Cloud!`, 'success', 5000);
     }
   } else {
-    toast(`🎉 Saved ${parsedQuestions.length} new questions & flashcards!`, 'success', 5000);
+    const custom = lsGet('hp_questions', []);
+    parsedQuestions.forEach(q => custom.push(q));
+    lsSet('hp_questions', custom);
+    toast(`🎉 Saved ${parsedQuestions.length} new questions!`, 'success', 5000);
   }
 
   parsedQuestions = [];

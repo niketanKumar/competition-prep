@@ -620,8 +620,9 @@ async function doImport() {
     lsSet('hp_questions', custom);
 
     if (isSupabaseConfigured() && newItems.length > 0) {
-      toast(`⏳ Syncing ${newItems.length} questions to Supabase Cloud…`, 'default', 2000);
+      toast(`⏳ Syncing ${newItems.length} questions to Cloud…`, 'default', 3000);
       const { error } = await batchUpsertQuestions(newItems);
+      await loadCloudQuestions();
       if (error) console.warn('[Questions] Supabase batch import error:', error.message);
     }
 
