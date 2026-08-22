@@ -3,9 +3,10 @@ import { normalizeSubjectId } from '../data/subjects.js';
 
 const GEMINI_MODELS = [
   'gemini-2.5-flash',
+  'gemini-2.5-flash-preview-05-20',
   'gemini-2.0-flash',
   'gemini-1.5-flash',
-  'gemini-1.5-pro',
+  'gemini-1.5-flash-8b',
 ];
 
 const GROQ_MODELS = [
@@ -135,6 +136,14 @@ async function callGemini(prompt, systemInstruction = '', maxTokens = 1500) {
   const key = getNextGeminiKey();
   if (!key) throw new Error('No Gemini API keys configured.');
 
+  // Validate key format — Gemini AI Studio keys always start with 'AIza'
+  if (!key.startsWith('AIza')) {
+    throw new Error(
+      'Invalid Gemini API key format. Keys from aistudio.google.com always start with "AIza". ' +
+      'Please remove the current key in Settings and add the correct one.'
+    );
+  }
+
   let lastError = null;
   for (const model of GEMINI_MODELS) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
@@ -154,12 +163,25 @@ async function callGemini(prompt, systemInstruction = '', maxTokens = 1500) {
         body: JSON.stringify(body),
       });
 
-      if (res.status === 429) throw new Error('Gemini quota reached.');
-      if (res.status === 404) continue;
+      if (res.status === 429) throw new Error('Gemini quota reached. Try again later or add more keys.');
+
+      // Invalid key or permission denied — stop immediately, don't try other models
+      if (res.status === 400 || res.status === 401 || res.status === 403) {
+        const errData = await res.json().catch(() => ({}));
+        const msg = errData?.error?.message || `HTTP ${res.status}`;
+        throw new Error(`Gemini API key rejected: ${msg}. Please check your key in Settings.`);
+      }
+
+      // Model not found — try next model but record the error
+      if (res.status === 404) {
+        lastError = new Error(`Model "${model}" not available for this key.`);
+        continue;
+      }
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err?.error?.message || `Gemini error (${res.status})`);
+        lastError = new Error(err?.error?.message || `Gemini error (${res.status})`);
+        continue;
       }
 
       const data = await res.json();
@@ -173,8 +195,10 @@ async function callGemini(prompt, systemInstruction = '', maxTokens = 1500) {
           badge: `🌐 Powered by Gemini (${model}) • Key: ${maskKey(key)}`
         };
       }
+      // Empty response — try next model
+      lastError = new Error(`Model "${model}" returned an empty response.`);
     } catch (e) {
-      if (e.message.includes('quota')) throw e;
+      if (e.message.includes('quota') || e.message.includes('rejected') || e.message.includes('Invalid Gemini')) throw e;
       lastError = e;
     }
   }
