@@ -20,6 +20,7 @@ let activeSubjectFilter = 'all';
 // Cached session so we don't fetch it on every re-render
 let _session = null;
 let _sessionLoaded = false;
+let _isFetching = false; // guard against concurrent renders
 
 async function getActiveSession() {
   if (_sessionLoaded) return _session;
@@ -83,6 +84,10 @@ export async function renderDocuments() {
     return;
   }
 
+  // Prevent duplicate concurrent fetches (e.g. from auth state + router firing together)
+  if (_isFetching) return;
+  _isFetching = true;
+
   // Show loading spinner while fetching
   container.innerHTML = '<div style="padding:var(--sp-16);text-align:center;color:var(--text-3)">' +
     '<div class="spinner" style="width:40px;height:40px;border-width:3px;margin:0 auto var(--sp-4)"></div>' +
@@ -97,12 +102,16 @@ export async function renderDocuments() {
     const { data: cloudDocs, error } = await fetchUserDocuments();
     if (error) {
       console.warn('[Documents] Cloud fetch error:', error);
-      toast('Could not load cloud library \u2014 showing local files only.', 'error');
+      // Only show toast if user_documents table is missing or there's a real error
+      if (error.code !== 'PGRST301' && error.message) {
+        toast('Could not load cloud library \u2014 showing local files only.', 'error');
+      }
     } else {
       allDocs = mergeDocs(cloudDocs, localDocs);
     }
   }
 
+  _isFetching = false;
   renderLibraryGrid(allDocs);
 }
 
