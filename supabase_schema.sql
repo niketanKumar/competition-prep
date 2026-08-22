@@ -163,3 +163,44 @@ ALTER TABLE public.user_bookmarks ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Users can manage their bookmarks" ON public.user_bookmarks
   FOR ALL USING (auth.uid() = user_id);
+
+
+-- 7. USER DOCUMENTS TABLE (Library & Reader — persistent PDF + notes storage)
+-- PDF binaries are stored in Supabase Storage bucket: user-documents
+-- Metadata is stored here.
+-- is_admin_upload = TRUE  → document is visible to ALL authenticated users
+-- is_admin_upload = FALSE → document is visible ONLY to the uploader
+CREATE TABLE IF NOT EXISTS public.user_documents (
+  id TEXT PRIMARY KEY,                          -- e.g. 'pdf_1722345678901'
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  type TEXT NOT NULL DEFAULT 'pdf',             -- 'pdf' | 'text'
+  storage_path TEXT,                            -- Supabase Storage path for PDFs
+  pages JSONB DEFAULT '[]'::jsonb,              -- text note page array
+  is_admin_upload BOOLEAN NOT NULL DEFAULT FALSE, -- TRUE = visible to all users
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Enable RLS on user_documents
+ALTER TABLE public.user_documents ENABLE ROW LEVEL SECURITY;
+
+-- Admin-uploaded docs are visible to every authenticated user;
+-- student-uploaded docs are visible only to the uploader.
+CREATE POLICY "Read own or admin docs" ON public.user_documents
+  FOR SELECT USING (
+    auth.uid() = user_id
+    OR is_admin_upload = TRUE
+  );
+
+-- Only the uploader can insert / update / delete their own documents.
+CREATE POLICY "Users insert their own documents" ON public.user_documents
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users update their own documents" ON public.user_documents
+  FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users delete their own documents" ON public.user_documents
+  FOR DELETE USING (auth.uid() = user_id);
+

@@ -298,3 +298,87 @@ export async function fetchBookmarksCloud(userId) {
   const { data, error } = await sb.from('user_bookmarks').select('question_id').eq('user_id', userId);
   return { data: (data || []).map(b => b.question_id), error };
 }
+
+// ─── User Documents (Library & Reader) ───────────────────────────────────────
+
+/**
+ * Upload a PDF File object to Supabase Storage.
+ * Path format: {userId}/{docId}.pdf
+ * Returns { path, error }
+ */
+export async function uploadDocumentFile(userId, docId, file) {
+  const sb = getSupabase();
+  if (!sb) return { path: null, error: { message: 'Not connected' } };
+
+  const path = `${userId}/${docId}.pdf`;
+  const { error } = await sb.storage
+    .from('user-documents')
+    .upload(path, file, { upsert: true, contentType: 'application/pdf' });
+
+  if (error) return { path: null, error };
+  return { path, error: null };
+}
+
+/**
+ * Get a signed URL (valid 1 hour) for a stored PDF.
+ * Returns { url, error }
+ */
+export async function getDocumentSignedUrl(storagePath) {
+  const sb = getSupabase();
+  if (!sb) return { url: null, error: { message: 'Not connected' } };
+
+  const { data, error } = await sb.storage
+    .from('user-documents')
+    .createSignedUrl(storagePath, 3600); // 1 hour
+
+  return { url: data?.signedUrl || null, error };
+}
+
+/**
+ * Fetch all documents visible to the current user:
+ * - Their own documents
+ * - All admin-uploaded documents (handled by RLS policy)
+ * Returns { data: [], error }
+ */
+export async function fetchUserDocuments() {
+  const sb = getSupabase();
+  if (!sb) return { data: [], error: null };
+
+  const { data, error } = await sb
+    .from('user_documents')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  return { data: data || [], error };
+}
+
+/**
+ * Insert or update a document metadata row.
+ * doc must include: { id, user_id, title, subject, description, type, storage_path, pages, is_admin_upload }
+ * Returns { error }
+ */
+export async function saveUserDocument(doc) {
+  const sb = getSupabase();
+  if (!sb) return { error: { message: 'Not connected' } };
+
+  const { error } = await sb.from('user_documents').upsert(doc);
+  return { error };
+}
+
+/**
+ * Delete a document metadata row AND its storage object (if any).
+ * Returns { error }
+ */
+export async function deleteUserDocument(docId, storagePath) {
+  const sb = getSupabase();
+  if (!sb) return { error: { message: 'Not connected' } };
+
+  // Delete storage file first (ignore error if file doesn't exist)
+  if (storagePath) {
+    await sb.storage.from('user-documents').remove([storagePath]);
+  }
+
+  // Delete metadata row
+  const { error } = await sb.from('user_documents').delete().eq('id', docId);
+  return { error };
+}
