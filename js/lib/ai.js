@@ -11,9 +11,9 @@ const GEMINI_MODELS = [
 ];
 
 const GROQ_MODELS = [
-  'llama-3.1-8b-instant',
-  'llama3-70b-8192',
-  'mixtral-8x7b-32768',
+  'openai/gpt-oss-20b',    // fast, replaces llama-3.1-8b-instant (deprecated 08/16/26)
+  'openai/gpt-oss-120b',  // powerful, replaces llama3-70b-8192 + mixtral (deprecated)
+  'qwen/qwen3.6-27b',     // alternative high-quality model
 ];
 
 // Cache of discovered model IDs keyed by the first 16 chars of the API key
@@ -29,6 +29,8 @@ async function discoverGeminiModels(key) {
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models?key=${key}&pageSize=50`
     );
+    // If quota exceeded or not authorized, skip discovery silently
+    if (res.status === 429 || res.status === 401 || res.status === 403) return null;
     if (!res.ok) return null;
     const data = await res.json();
     const models = (data.models || [])
