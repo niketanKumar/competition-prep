@@ -5,6 +5,7 @@ const GEMINI_MODELS = [
   'gemini-2.5-flash',
   'gemini-2.5-flash-preview-05-20',
   'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
   'gemini-1.5-flash',
   'gemini-1.5-flash-8b',
 ];
@@ -136,13 +137,8 @@ async function callGemini(prompt, systemInstruction = '', maxTokens = 1500) {
   const key = getNextGeminiKey();
   if (!key) throw new Error('No Gemini API keys configured.');
 
-  // Validate key format — Gemini AI Studio keys always start with 'AIza'
-  if (!key.startsWith('AIza')) {
-    throw new Error(
-      'Invalid Gemini API key format. Keys from aistudio.google.com always start with "AIza". ' +
-      'Please remove the current key in Settings and add the correct one.'
-    );
-  }
+  // Note: Google AI Studio keys can start with 'AIza' OR 'AQ.' (newer project-linked format).
+  // Both are valid — do NOT restrict by prefix.
 
   let lastError = null;
   for (const model of GEMINI_MODELS) {
@@ -165,16 +161,17 @@ async function callGemini(prompt, systemInstruction = '', maxTokens = 1500) {
 
       if (res.status === 429) throw new Error('Gemini quota reached. Try again later or add more keys.');
 
-      // Invalid key or permission denied — stop immediately, don't try other models
-      if (res.status === 400 || res.status === 401 || res.status === 403) {
+      // Unauthorized / forbidden — invalid key, stop immediately
+      if (res.status === 401 || res.status === 403) {
         const errData = await res.json().catch(() => ({}));
         const msg = errData?.error?.message || `HTTP ${res.status}`;
         throw new Error(`Gemini API key rejected: ${msg}. Please check your key in Settings.`);
       }
 
-      // Model not found — try next model but record the error
-      if (res.status === 404) {
-        lastError = new Error(`Model "${model}" not available for this key.`);
+      // Model not found or bad request for this model — try next
+      if (res.status === 404 || res.status === 400) {
+        const errData = await res.json().catch(() => ({}));
+        lastError = new Error(errData?.error?.message || `Model "${model}" not available (HTTP ${res.status}).`);
         continue;
       }
 
@@ -198,12 +195,12 @@ async function callGemini(prompt, systemInstruction = '', maxTokens = 1500) {
       // Empty response — try next model
       lastError = new Error(`Model "${model}" returned an empty response.`);
     } catch (e) {
-      if (e.message.includes('quota') || e.message.includes('rejected') || e.message.includes('Invalid Gemini')) throw e;
+      if (e.message.includes('quota') || e.message.includes('rejected')) throw e;
       lastError = e;
     }
   }
 
-  throw lastError || new Error('Failed to connect to Gemini models.');
+  throw lastError || new Error('All Gemini models failed to respond. Check your API key and network.');
 }
 
 // ─── Unified AI Provider Selector & Fallback ─────────────────────────────────
