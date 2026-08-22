@@ -16,6 +16,48 @@ const GROQ_MODELS = [
   'mixtral-8x7b-32768',
 ];
 
+// Cache of discovered model IDs keyed by the first 16 chars of the API key
+const _modelCache = {};
+
+// Calls the ListModels endpoint and returns model IDs that support generateContent,
+// sorted with the most capable/fastest models first.
+async function discoverGeminiModels(key) {
+  const cacheKey = key.slice(0, 16);
+  if (_modelCache[cacheKey]) return _modelCache[cacheKey];
+
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${key}&pageSize=50`
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const models = (data.models || [])
+      .filter(m => m.supportedGenerationMethods?.includes('generateContent'))
+      .map(m => m.name.replace('models/', ''))
+      .sort((a, b) => {
+        // Prefer newer / faster flash models first
+        const rank = (n) => {
+          if (n.startsWith('gemini-2.5-flash')) return 0;
+          if (n.startsWith('gemini-2.5')) return 1;
+          if (n.startsWith('gemini-2.0-flash') && !n.includes('lite')) return 2;
+          if (n.startsWith('gemini-2.0')) return 3;
+          if (n.startsWith('gemini-1.5-flash') && !n.includes('8b')) return 4;
+          if (n.startsWith('gemini-1.5')) return 5;
+          return 6;
+        };
+        return rank(a) - rank(b);
+      });
+    if (models.length > 0) {
+      _modelCache[cacheKey] = models;
+      console.log('[AI] Discovered Gemini models:', models.slice(0, 5));
+      return models;
+    }
+  } catch (e) {
+    console.warn('[AI] Model discovery failed, using static list:', e);
+  }
+  return null;
+}
+
 // ─── Key Management ──────────────────────────────────────────────────────────
 function getGeminiKeys() {
   try { return JSON.parse(localStorage.getItem('hp_ai_keys') || '[]'); } catch { return []; }
@@ -140,8 +182,12 @@ async function callGemini(prompt, systemInstruction = '', maxTokens = 1500) {
   // Note: Google AI Studio keys can start with 'AIza' OR 'AQ.' (newer project-linked format).
   // Both are valid — do NOT restrict by prefix.
 
+  // Auto-discover which models are actually available for this key (cached per session)
+  const discovered = await discoverGeminiModels(key);
+  const modelsToTry = discovered || GEMINI_MODELS;
+
   let lastError = null;
-  for (const model of GEMINI_MODELS) {
+  for (const model of modelsToTry) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
     const body = {
       contents: [{ parts: [{ text: prompt }] }],
